@@ -33,10 +33,12 @@ until you have seen the exact text and recipients and approved it.
 
 ## Data
 
-The plugin itself stores nothing and runs no code. Requests go only to
-`api.mailly.site`, which handles your mail under Mailly's
-[privacy policy](https://mailly.site/privacy) and [terms](https://mailly.site/terms).
-Email content you ask about is returned to Claude so it can answer you.
+The plugin itself stores nothing and runs no code on your machine. Claude talks
+only to the Mailly MCP server at `mcp.mailly.site`, which forwards each request
+with your sign-in to Mailly's API at `api.mailly.site`. Mailly handles your mail
+under its [privacy policy](https://mailly.site/privacy) and
+[terms](https://mailly.site/terms). Email content you ask about is returned to
+Claude so it can answer you. The MCP server is open source in this repository.
 
 ## Support
 
