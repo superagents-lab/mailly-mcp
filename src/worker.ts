@@ -74,7 +74,7 @@ export default {
     }
     if (!principal) return challenge(url.origin, 'invalid_token');
     // Stateless: one server per request, scoped to the caller's grant; tools outside the grant are not listed.
-    const handler = createMcpHandler(() => createMaillyMcpServer(api, principal, { apps: env.MCP_APPS === '1' }), {
+    const handler = createMcpHandler(() => createMaillyMcpServer(api, principal, { apps: env.MCP_APPS === '1', serverUrl: `${url.origin}/mcp` }), {
       route: '/mcp',
       onerror: (error) => console.error('[mcp] handler error', error.message),
     });

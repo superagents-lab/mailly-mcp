@@ -4,7 +4,7 @@ import type { MaillyApi } from './server';
 import type { McpPrincipal } from './principal';
 import { SCOPES } from './scopes';
 import { parseWorkflowDefinition } from './lib/workflow-model';
-import { uiMeta, uiResult, WORKSPACE } from './ui';
+import { uiResult } from './ui';
 import { canonical, confirmed, DESTRUCTIVE, GUARD, OUTWARD, requireScope } from './common';
 
 const key = z.string().min(1).max(200).refine(s => !/[\r\n]/.test(s) && s !== '.' && s !== '..');
@@ -17,7 +17,7 @@ const writeDraft = { readOnlyHint: false, destructiveHint: false, openWorldHint:
 export function registerAutomationTools(server: McpServer, api: MaillyApi, principal: McpPrincipal) {
   const can = (scope: string) => principal.scopes.includes(scope);
   const result = (route: string, data: Record<string, any>) => uiResult({ ...data, view: 'automation', route, account_id: principal.email,
-    permissions: { draft: can(SCOPES.draft), send: can(SCOPES.send), manage: can(SCOPES.manage), client: true, remote_images: true } });
+    permissions: { draft: can(SCOPES.draft), send: can(SCOPES.send), manage: can(SCOPES.manage), remote_images: true } });
   const run = async (route: string, fn: () => Promise<Record<string, any>>) => {
     try { return result(route, await fn()); }
     catch(error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : 'Request failed' }] }; }
@@ -37,7 +37,7 @@ export function registerAutomationTools(server: McpServer, api: MaillyApi, princ
   if (!can(SCOPES.manage)) return;
   server.registerTool('mailly_save_workflow_draft', {
     title: 'Configure workflow draft', description: 'Create or update a workflow draft using the same API as the CLI. Does not publish, run, or send. Read the current definition before editing and preserve settings outside the requested changes. On a create conflict, read the same key instead of creating a duplicate. Publishing is a separate step (mailly_manage_workflow) after the user reviews the draft.',
-    inputSchema: z.object({ mode: z.enum(['create','update']), workflow_key: key, name: z.string().min(1).max(200), definition }), annotations: writeDraft, _meta: uiMeta(WORKSPACE),
+    inputSchema: z.object({ mode: z.enum(['create','update']), workflow_key: key, name: z.string().min(1).max(200), definition }), annotations: writeDraft,
   }, ({ mode, workflow_key, name, definition: value }) => run('workflows', () => api(mode === 'create' ? 'POST' : 'PUT', mode === 'create' ? '/workflows' : `/workflows/${encodeURIComponent(workflow_key)}/draft`, { body: { ...(mode === 'create' ? { workflowKey: workflow_key } : {}), name, definition: parseWorkflowDefinition(value) } })));
   server.registerTool('mailly_cancel_workflow_run', {
     title: 'Cancel one workflow run', description: `Stop one queued, running or waiting run (find its id with mailly_list_workflow_runs) before its remaining steps; emails already sent are not recalled and other runs of the workflow are untouched. A run that already ended is left as is (cancelled=false). The reason is kept in the run log. ${GUARD}`,
@@ -48,11 +48,11 @@ export function registerAutomationTools(server: McpServer, api: MaillyApi, princ
     inputSchema: z.object({ campaignKey: key, name: z.string().max(200).optional(), emailType: z.enum(['transactional','lifecycle','marketing']), senderEmail: z.string().email(), fromName: z.string().max(200).optional(), replyTo: z.string().email().optional(), subject: z.string().min(1).max(998), html: text.optional(), text: text.optional(), topic: key.optional(), recipientReason: z.string().max(300).optional(), businessGoal: z.string().max(300).optional(),
       audience: z.object({ include: z.array(key).max(100).optional(), exclude: z.array(key).max(100).optional(), recipients: z.array(z.string().email()).max(1000).optional() }).optional(),
       frequencyCapDays: z.number().int().min(1).max(3650).optional(), frequencyCapMax: z.number().int().min(1).max(3650).optional(), topicExclusionDays: z.number().int().min(1).max(3650).optional() }),
-    annotations: { ...writeDraft, idempotentHint: true }, _meta: uiMeta(WORKSPACE),
+    annotations: { ...writeDraft, idempotentHint: true },
   }, body => run('campaigns', () => api('POST', '/campaigns', { body: { ...body, sourceApp: 'mailly_plugin' } })));
   server.registerTool('mailly_update_campaign_content', {
     title: 'Edit paused campaign content', description: 'Edit only a paused campaign subject or body; keep it paused without sending. Read the campaign first. Never automatically pause a running campaign to edit it. Resuming is a separate step (mailly_manage_campaign) after the user reviews the content.',
-    inputSchema: z.object({ campaign_key: key, subject: z.string().min(1).max(998).optional(), html: text.nullable().optional(), text: text.nullable().optional() }), annotations: writeDraft, _meta: uiMeta(WORKSPACE),
+    inputSchema: z.object({ campaign_key: key, subject: z.string().min(1).max(998).optional(), html: text.nullable().optional(), text: text.nullable().optional() }), annotations: writeDraft,
   }, ({ campaign_key, ...body }) => run('campaigns', () => api('PATCH', `/campaigns/${encodeURIComponent(campaign_key)}/content`, { body })));
   server.registerTool('mailly_manage_campaign', {
     title: 'Pause, resume, cancel or complete campaign', description: `Change a campaign's state. pause stops sending (sending/scheduled only); resume continues sending to the remaining audience (paused only, needs send permission: confirm the user reviewed content and audience); cancel stops it for good; complete closes a sending or paused campaign without sending the rest. ${GUARD}`,
