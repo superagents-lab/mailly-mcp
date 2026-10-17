@@ -1,0 +1,21 @@
+{
+  "name": "mailly",
+  "version": "0.3.0",
+  "description": "Give Codex a real inbox: read and search mail, draft replies you review before they are sent, wait for verification codes, and prepare campaigns and workflows in Mailly.",
+  "author": {
+    "name": "Mailly",
+    "url": "https://mailly.site"
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.codex-plugin/mcp.json",
+  "interface": {
+    "displayName": "Mailly",
+    "shortDescription": "Email for agents",
+    "longDescription": "Read and search a real Mailly inbox, draft replies that wait for your review, wait for verification codes, and prepare campaign and workflow drafts. Nothing is sent until you approve it. Administration stays in the Mailly web workspace.",
+    "developerName": "Mailly",
+    "category": "Productivity",
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": "Check my Mailly inbox and tell me what needs a reply."
+  }
+}

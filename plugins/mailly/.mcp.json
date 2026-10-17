@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mailly": {
+      "type": "http",
+      "url": "https://api.mailly.site/mcp"
+    }
+  }
+}
