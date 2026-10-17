@@ -46,7 +46,7 @@ export function registerWebhookTools(server: McpServer, api: MaillyApi, principa
 
   server.registerTool('mailly_save_inbox_webhook', {
     title: 'Configure default inbound webhook',
-    description: `Create or replace the workspace default inbound webhook, used by addresses without an active endpoint of their own. Omitted body_format/strip_quotes keep their current values; active defaults to true. ${GUARD} ${SECRET}`,
+    description: `Create or replace the workspace default inbound webhook, used by addresses without an active endpoint of their own (payload format and signature verification: https://mailly.site/docs/webhooks). Omitted body_format/strip_quotes keep their current values; active defaults to true. ${GUARD} ${SECRET}`,
     inputSchema: z.object({ url, body_format: bodyFormat, strip_quotes: stripQuotes, active: z.boolean().optional(), rotate_secret: z.boolean().optional(), confirmed }),
     annotations: change,
   }, (args) => run(() => api('PUT', '/inbox/webhook', { body: endpointBody(args) })));
