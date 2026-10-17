@@ -1,0 +1,17 @@
+{
+  "name": "mailly",
+  "owner": {
+    "name": "Mailly",
+    "url": "https://mailly.site"
+  },
+  "metadata": {
+    "description": "A real email inbox for Claude, from Mailly."
+  },
+  "plugins": [
+    {
+      "name": "mailly",
+      "source": "./plugins/mailly",
+      "description": "Give Claude a real inbox: read mail, draft replies for your review, wait for verification codes, and set up campaigns and workflows."
+    }
+  ]
+}

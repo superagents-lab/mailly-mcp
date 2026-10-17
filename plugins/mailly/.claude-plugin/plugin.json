@@ -1,0 +1,14 @@
+{
+  "name": "mailly",
+  "displayName": "Mailly",
+  "version": "0.3.0",
+  "description": "Give Claude a real inbox: read and search mail, draft replies you review before they are sent, wait for verification codes, and prepare campaigns and workflows in Mailly.",
+  "author": {
+    "name": "Mailly",
+    "url": "https://mailly.site"
+  },
+  "homepage": "https://mailly.site/docs/clients/claude",
+  "repository": "https://github.com/superagents-lab/mailly-mcp",
+  "license": "MIT",
+  "keywords": ["email", "inbox", "mcp", "drafts", "campaigns"]
+}
