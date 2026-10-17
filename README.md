@@ -47,6 +47,10 @@ npm test             # builds dist/worker.js and runs it in Miniflare against a 
 The Mailly server repository runs its OAuth and end-to-end tests against `dist/worker.js` from a sibling
 checkout of this repository.
 
+`server.json` is the listing in the [MCP Registry](https://registry.modelcontextprotocol.io) as
+`io.github.superagents-lab/mailly`. Pushing a `v*` tag (or running the *Publish to MCP Registry* workflow)
+publishes it, signing in with the workflow's GitHub OIDC token.
+
 ## License
 
 MIT

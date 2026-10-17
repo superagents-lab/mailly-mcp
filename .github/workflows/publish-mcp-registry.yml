@@ -1,0 +1,22 @@
+name: Publish to MCP Registry
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # GitHub OIDC proves ownership of io.github.superagents-lab/*
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install mcp-publisher
+        run: curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+      - name: Use the tag as the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: jq --arg v "${GITHUB_REF#refs/tags/v}" '.version = $v' server.json > server.tmp && mv server.tmp server.json
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish
