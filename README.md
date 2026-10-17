@@ -48,7 +48,7 @@ The Mailly server repository runs its OAuth and end-to-end tests against `dist/w
 checkout of this repository.
 
 `server.json` is the listing in the [MCP Registry](https://registry.modelcontextprotocol.io) as
-`site.mailly/mailly`. The `site.mailly` namespace is proven by a DNS TXT record on mailly.site, so publish with
+`site.mailly/mcp`. The `site.mailly` namespace is proven by a DNS TXT record on mailly.site, so publish with
 `mcp-publisher login dns --domain mailly.site --private-key <key>` and `mcp-publisher publish` from a machine that
 holds the key. Bump `version` for each release.
 
