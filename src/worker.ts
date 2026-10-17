@@ -2,6 +2,7 @@ import { createMcpHandler } from 'agents/mcp/server';
 import { bearerToken, resolvePrincipal } from './principal';
 import { MaillyApiError, createApi, createMaillyMcpServer } from './server';
 import { MAIL_SCOPES } from './scopes';
+import { BRAND_VERSION } from './brand';
 
 export interface Env {
   /** Service binding to the Mailly API Worker. Without it, requests go to MAILLY_API_URL over the internet. */
@@ -15,6 +16,17 @@ export interface Env {
 const PUBLIC_CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS', 'Access-Control-Allow-Headers': 'MCP-Protocol-Version' };
 const PROTECTED_RESOURCE = /^\/\.well-known\/oauth-protected-resource(\/mcp)?$/;
 const AUTHORIZATION_SERVER = /^\/\.well-known\/(oauth-authorization-server|openid-configuration)(\/.*)?$/;
+
+const FAVICONS = new Set(['/favicon.ico', '/favicon.svg', '/apple-touch-icon.png', '/icon-192.png', '/icon-512.png']);
+
+async function favicon(path: string) {
+  const upstream = await fetch(`https://mailly.site${path}?v=${BRAND_VERSION}`);
+  if (!upstream.ok) return new Response('Not found', { status: 404 });
+  return new Response(upstream.body, { headers: {
+    'Content-Type': upstream.headers.get('content-type') ?? 'application/octet-stream',
+    'Cache-Control': 'public, max-age=86400',
+  } });
+}
 
 const apiBase = (env: Env) => (env.MAILLY_API_URL || 'https://api.mailly.site').replace(/\/+$/, '');
 const fetchApi = (env: Env) => env.MAILLY_API ? (inner: Request) => env.MAILLY_API!.fetch(inner) : (inner: Request) => fetch(inner);
@@ -58,6 +70,8 @@ export default {
     if (PROTECTED_RESOURCE.test(url.pathname)) return protectedResource(url.origin, env);
     if (AUTHORIZATION_SERVER.test(url.pathname)) return authorizationServer(env);
     if (url.pathname === '/') return Response.redirect('https://mailly.site/docs/clients', 302);
+    // Connector UIs look up the icon from the MCP host's own favicon, so serve Mailly's current one here.
+    if (FAVICONS.has(url.pathname)) return favicon(url.pathname);
     if (url.pathname !== '/mcp') return new Response('Not found', { status: 404 });
     if (request.method === 'OPTIONS') return createMcpHandler(() => { throw new Error('unreachable'); }, { route: '/mcp' }).fetch(request);
 

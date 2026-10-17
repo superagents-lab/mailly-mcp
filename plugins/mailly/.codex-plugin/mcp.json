@@ -1,7 +1,18 @@
 {
   "mcpServers": {
     "mailly": {
-      "url": "https://mcp.mailly.site/mcp"
+      "type": "streamable-http",
+      "url": "https://mcp.mailly.site/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "cimd"
+            }
+          }
+        }
+      }
     }
   }
 }
