@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.superagents-lab/mailly",
+  "name": "site.mailly/mailly",
   "title": "Mailly",
   "description": "A real inbox for agents: read mail, draft replies you approve, wait for verification codes.",
   "websiteUrl": "https://mailly.site/docs/clients",
@@ -13,7 +13,9 @@
     {
       "src": "https://raw.githubusercontent.com/superagents-lab/mailly-mcp/main/plugins/mailly/assets/icon.svg",
       "mimeType": "image/svg+xml",
-      "sizes": ["any"]
+      "sizes": [
+        "any"
+      ]
     }
   ],
   "remotes": [
