@@ -1,5 +1,5 @@
 // Keep in step with BRAND_VERSION in Mailly's web app: the query string busts icon caches.
-const BRAND_VERSION = '20261009';
+export const BRAND_VERSION = '20261009';
 const WEB_BASE = 'https://mailly.site';
 const asset = (path: string) => `${WEB_BASE}${path}?v=${BRAND_VERSION}`;
 
