@@ -90,6 +90,7 @@ test('an API key gets every tool, and each call reaches the API with that key', 
   for (const tool of tools) {
     assert.ok(tool.title, `${tool.name} has a title`);
     assert.ok(tool.annotations && ('readOnlyHint' in tool.annotations || 'destructiveHint' in tool.annotations), `${tool.name} is annotated`);
+    assert.equal(tool.annotations.title, tool.title, `${tool.name} mirrors its title in annotations`);
     assert.ok(tool.name.length <= 64, tool.name);
   }
   assert.ok(!names.some((name) => name.startsWith('mailly_client_') || name === 'mailly_open'), 'app-only tools stay off without MCP Apps');
