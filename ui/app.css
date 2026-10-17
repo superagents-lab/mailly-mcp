@@ -141,82 +141,11 @@ html[data-display-mode="inline"] #notice { border: 0; border-radius: var(--radiu
 .picker-intro { display: none; }
 .content-kind { margin-bottom: 8px; }
 
-/* Full client shell: navigation is separate from the existing email list. */
-#client-shell { display: flex; flex: 1; min-height: 0; }
 #inbox-area { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
-#app-nav { display: flex; flex-direction: column; width: 164px; flex-shrink: 0; padding: 8px; overflow: auto; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--muted) 24%, var(--background)); }
-.nav-group { margin-bottom: 16px; }
-.nav-label { color: var(--muted-foreground); font-size: 11px; padding: 8px 10px 4px; }
-#app-nav .nav-item { display: flex; width: 100%; justify-content: flex-start; font-size: 13px; min-height: 34px; padding: 6px 10px; margin-bottom: 2px; }
-.nav-item[aria-current="page"] { background: var(--muted); color: var(--foreground); font-weight: 600; }
-#nav-toggle { display: none; }
-#client-page { padding: 28px 32px 110px; }
-#client-page > .client-content { max-width: 1100px; }
-.client-heading { margin-bottom: 24px; }
-.client-heading h1 { font-size: 23px; font-weight: 600; margin-bottom: 8px; }
-.client-heading p { line-height: 1.65; }
-.client-section { border: 1px solid var(--border); border-radius: var(--radius, 8px); padding: 20px; margin-block: 20px; }
-.client-section h2 { font-size: 15px; margin-bottom: 14px; font-weight: 600; }
-.client-section > .btn { margin: 4px 8px 4px 0; }
-.client-content > .btn { margin: 0 8px 12px 0; }
-.client-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
-.metric-value { display: block; font-size: 28px; font-weight: 600; }
-.client-metrics .client-section { margin: 0; }
-.client-table-wrap { overflow: auto; margin-top: 16px; border-block: 1px solid var(--border); }
-.client-table { border-collapse: collapse; width: 100%; text-align: left; font-size: 13px; }
-.client-table th { color: var(--muted-foreground); font-weight: 500; padding: 12px; white-space: nowrap; background: color-mix(in srgb, var(--muted) 24%, var(--background)); }
-.client-table td { padding: 12px; border-top: 1px solid var(--border); min-width: 72px; max-width: 340px; overflow-wrap: anywhere; vertical-align: top; }
-.client-table td .row-link { white-space: normal; text-align: left; height: auto; justify-content: flex-start; padding: 0; color: var(--mailly-accent); min-width: 100px; }
-.client-table tbody tr:hover { background: color-mix(in srgb, var(--muted) 20%, transparent); }
-.client-pagination { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; }
-.client-facts { display: grid; grid-template-columns: minmax(90px, 150px) 1fr; gap: 10px 20px; margin-block: 16px; font-size: 13px; }
-.client-facts dt { color: var(--muted-foreground); }
-.client-facts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-.client-form { display: grid; gap: 16px; max-width: 720px; margin-block: 16px; }
-.client-form > .btn { justify-self: start; }
-.client-field { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
-.client-field input, .client-field select, .client-field textarea { width: 100%; }
-.client-field textarea { resize: vertical; min-height: 72px; }
-.client-field small { line-height: 1.5; }
-.skill-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
-.client-section > .client-field { margin-block: 14px; }
-.mail-editor { min-height: 230px; padding: 18px; outline: none; line-height: 1.65; overflow-wrap: anywhere; }
-.mail-editor:focus { box-shadow: inset 0 0 0 2px var(--ring); border-radius: 4px; }
-.mail-editor ul { list-style: disc; padding-left: 24px; }
-.mail-editor b { font-weight: 700; }
-.mail-editor i { font-style: italic; }
-.editor-toolbar { display: flex; gap: 6px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-.compose-form .client-section { margin: 0; }
-.client-dialog { max-width: 760px; }
-.client-dialog > div:not(.actions) { max-height: 60vh; overflow: auto; margin-bottom: 20px; }
-.workflow-steps { padding-left: 24px; list-style: decimal; }
-.workflow-steps li { padding: 10px; border-bottom: 1px solid var(--border); }
 .mail-actions { justify-content: flex-start; margin-bottom: 12px; gap: 4px; }
 html:is([data-surface="mail"],[data-surface="draft"],[data-surface="inbox"]) #app-nav,
-html:is([data-surface="mail"],[data-surface="draft"],[data-surface="inbox"]) #nav-toggle { display: none !important; }
 @media (max-width: 900px) {
-  #app-nav { width: 138px; }
-  #client-page { padding: 20px 20px 110px; }
-  .client-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
-@media (max-width: 660px) {
-  #nav-toggle { display: inline-flex; }
-  #app-nav { display: none; width: 200px; position: absolute; top: 46px; bottom: 0; left: 0; z-index: 10; background: var(--background); box-shadow: 8px 0 24px #0002; }
-  #client-shell.nav-open #app-nav { display: flex; }
-  #client-page:not([hidden]) { display: block; padding: 20px 16px 110px; }
-  .client-section { padding: 16px; }
-  .client-facts { grid-template-columns: 90px 1fr; }
-}
-.compose-form { grid-template-columns: 1fr 1fr; }
-.compose-form > :not(.client-field:nth-child(-n+2)) { grid-column: 1 / -1; }
-.compose-form > .btn { justify-self: start; }
-.compose-advanced > summary { color: var(--muted-foreground); font-size: 13px; padding-block: 8px; }
-.compose-advanced .client-field { margin-block: 14px; }
-@media (max-width: 660px) { .compose-form { grid-template-columns: 1fr; } }
 
-/* Focused client: mail and automation, with administration in the Web workspace. */
-#app-nav > .brand-action { margin-bottom: 18px; }
-#app-nav .workspace-link { margin-top: auto; color: var(--muted-foreground); padding-top: 14px; }
 #mail-folder { max-width: 125px; padding-inline: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.workflow-json { font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 12px; }

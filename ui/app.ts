@@ -3,11 +3,10 @@ import { OpenAIExtensions } from '@openai/mcp-extensions/app';
 import '@openai/mcp-extensions/app/styles.css';
 import { renderEmailBody } from './email-body.js';
 import { originalEmail } from './original-email.js';
-import { createClient } from './client.js';
 import { iconify } from './icons.js';
 
 type Row = Record<string, any>;
-const surface = document.documentElement.dataset.surface ?? 'workspace';
+const surface = document.documentElement.dataset.surface ?? 'mail';
 const isCard = surface === 'mail' || surface === 'draft';
 const isPicker = surface === 'inbox';
 const app = new App({ name: 'Mailly', version: '0.2.0' }, { availableDisplayModes: isCard ? ['inline', 'fullscreen'] : ['fullscreen'] }, { autoResize: isCard });
@@ -27,7 +26,6 @@ let approval: { draft: Row; recipient: string } | undefined;
 let permissions: Row = {};
 let accountId: string | undefined;
 let folder = 'inbox';
-let client: ReturnType<typeof createClient> | undefined;
 let cacheGeneration = 0;
 type CachedThread = { data: Row; expires: number; nodes?: ChildNode[]; scroll?: number; mode?: string };
 const threadCache = new Map<string, CachedThread>();
@@ -40,7 +38,6 @@ function accountChanged(data: Row) {
   if (!data.account_id) return;
   if (accountId && accountId !== data.account_id) {
     clearCache(); edits.clear(); selected = undefined; selectedThreadId = undefined;
-    client?.reset();
     $('detail').replaceChildren(el('p', 'Account changed. Select a conversation.', 'empty'));
   }
   accountId = data.account_id;
@@ -89,7 +86,7 @@ async function sendToChat(id: string) {
   notice('Sent to the assistant. You can continue reading here.');
 }
 function toolData(result: Row) {
-  const data = { ...result.structuredContent, ...result._meta?.['mailly/client'], ...(result._meta?.['mailly/image'] ? { image: result._meta['mailly/image'] } : {}) };
+  const data = { ...result.structuredContent, ...(result._meta?.['mailly/image'] ? { image: result._meta['mailly/image'] } : {}) };
   const html = result._meta?.['mailly/html'] ?? {};
   return data.messages ? { ...data, messages: data.messages.map((message: Row) => ({ ...message, body_html: html[message.id] ?? message.body_html })) } : data;
 }
@@ -107,7 +104,7 @@ async function call(name: string, args: Row = {}) {
     throw new Error(message);
   }
   const mutation = /^mailly_(save|update|approve|discard)_draft$/.test(name);
-  if (mutation) { clearCache(); client?.invalidate(); }
+  if (mutation) clearCache();
   const data = toolData(response) as Row; accountChanged(data);
   if (mutation && data.view === 'thread') cacheThread(data);
   return data;
@@ -272,12 +269,6 @@ function renderThread(data: Row) {
     const timestamp = el('time', date(message.received_at), 'muted');
     timestamp.dateTime = new Date(message.received_at * 1000).toISOString();
     meta.append(from, timestamp);
-    if (!isCard && folder === 'quarantine' && permissions.manage === true) meta.append(button('Move to inbox', async () => {
-      await call('mailly_client_manage', { operation: 'message_release', id: message.id, confirmed: true });
-      clearCache(); selected = undefined; selectedThreadId = undefined;
-      $('detail').replaceChildren(el('p', 'Moved to inbox.', 'empty'));
-      await refreshList(); notice('Moved to inbox. Automations will not run again.');
-    }));
     const openLink = async (url: string) => {
       try { const result = await app.openLink({ url }); if (result.isError) notice('Could not open link.'); }
       catch { notice('Could not open link.'); }
@@ -355,8 +346,7 @@ function renderThread(data: Row) {
 }
 function accept(data: Row) {
   accountChanged(data);
-  if (data.view === 'automation' && client && ['campaigns','workflows'].includes(data.route)) { void action(() => client!.navigate(data.route, true)); }
-  else if (data.view === 'inbox') {
+  if (data.view === 'inbox') {
     threads = data.threads ?? []; cursor = data.cursor; renderList();
     $('account').textContent = data.authenticated ? `Connected · US$${data.balance} usage balance` : 'Not connected';
   } else if (data.view === 'thread') { cacheThread(data); ++requestVersion; $('detail').removeAttribute('aria-busy'); renderThread(data); renderList(); }
@@ -375,7 +365,7 @@ function hostChanged() {
   if (context?.styles?.variables) applyHostStyleVariables(context.styles.variables);
   if (context?.displayMode && displayMode !== context.displayMode) {
     displayMode = context.displayMode; document.documentElement.dataset.displayMode = displayMode;
-    if (selected && (isCard || client?.isInbox())) renderThread(selected);
+    if (selected) renderThread(selected);
   }
   for (const side of ['top', 'right', 'bottom', 'left'] as const) {
     document.documentElement.style.setProperty(`--mailly-safe-${side}`, `${Math.max(0, context?.safeAreaInsets?.[side] ?? 0)}px`);
@@ -387,7 +377,7 @@ function hostChanged() {
   }
 }
 app.onhostcontextchanged = hostChanged;
-for (const [id, label] of [['refresh', 'Refresh'], ['search-submit', 'Search'], ['nav-toggle', 'Menu']]) iconify($<HTMLButtonElement>(id), label);
+for (const [id, label] of [['refresh', 'Refresh'], ['search-submit', 'Search']]) iconify($<HTMLButtonElement>(id), label);
 $('search-submit').onclick = () => void action(searchList);
 $<HTMLInputElement>('query').onkeydown = (event) => { if (event.key === 'Enter') { event.preventDefault(); void action(searchList); } };
 $('more').onclick = () => void action(async () => {
@@ -396,18 +386,7 @@ $('more').onclick = () => void action(async () => {
 $('refresh').onclick = () => void action(async () => {
   clearCache();
   const account = await call('mailly_account'); $('account').textContent = `Connected · US$${account.balance} usage balance`;
-  if (client && !client.isInbox()) { await client.refresh(); return; }
   await refreshList(); if (selected && document.querySelector('.columns')!.classList.contains('selected')) await openThread(selected.thread_id);
-});
-if (!isCard && !isPicker) client = createClient({
-  call, openThread, askAssistant: async text => { const response = await submitChat(text); if(response.isError) throw new Error('Could not submit to Codex. Please try again.'); }, permissions: () => permissions, notice,
-  openLink: async url => { const result = await app.openLink({ url }); if (result.isError) throw new Error('Could not open link'); },
-  suspend: () => { ++requestVersion; rememberReader(); },
-  inbox: async (next = 'inbox') => {
-    if (folder !== next) { folder = next; clearCache(); selected = undefined; selectedThreadId = undefined; threads = []; $('detail').replaceChildren(el('p', 'Select a conversation', 'empty')); }
-    document.querySelector('.list-heading strong')!.textContent = folder === 'quarantine' ? 'Quarantine' : 'Inbox';
-    await refreshList();
-  },
 });
 $('cancel-send').onclick = () => { approval = undefined; $<HTMLDialogElement>('confirmation').close(); $('workspace').hidden = false; };
 $<HTMLDialogElement>('confirmation').addEventListener('cancel', () => { approval = undefined; });

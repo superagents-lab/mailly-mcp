@@ -1,6 +1,7 @@
 // Runs the built Worker (dist/worker.js) in Miniflare against a stub Mailly API bound as MAILLY_API.
 // End-to-end coverage against the real API lives in the Mailly server repo, which runs both Workers together.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { Miniflare } from 'miniflare';
 
@@ -115,11 +116,16 @@ test('an OAuth grant narrows the tool set, passes the token through and withhold
   assert.equal(drafts.structuredContent.drafts[0].review_url, undefined);
 });
 
-test('MCP Apps on: ui:// resources are served from the bundled UI', async (t) => {
+test('MCP Apps on: only the thread and draft cards are served, with Claude\'s sandbox domain', async (t) => {
   const { mf } = await worker(t, { apps: true });
   const rpc = rpcClient(mf, { Authorization: 'Bearer good-key' });
-  const resources = (await rpc('resources/list')).resources.map((resource) => resource.uri);
-  assert.ok(resources.includes('ui://mailly/thread-card'));
+  const resources = (await rpc('resources/list')).resources.map((resource) => resource.uri).sort();
+  assert.deepEqual(resources, ['ui://mailly/draft-card', 'ui://mailly/thread-card'], 'only the two inline cards; no fullscreen workspace');
   const card = await rpc('resources/read', { uri: 'ui://mailly/thread-card' });
   assert.match(card.contents[0].text, /data-surface="mail"/);
+  const domain = createHash('sha256').update('http://mcp.localhost/mcp').digest('hex').slice(0, 32);
+  assert.equal(card.contents[0]._meta.ui.domain, `${domain}.claudemcpcontent.com`, 'Claude sandbox origin derives from the server URL');
+  const names = (await rpc('tools/list')).tools.map((tool) => tool.name);
+  assert.ok(!names.some((name) => name.startsWith('mailly_client_') || name === 'mailly_open' || name === 'mailly_browse'), 'no workspace or catch-all tools');
+  assert.ok(names.includes('mailly_read_thread'));
 });

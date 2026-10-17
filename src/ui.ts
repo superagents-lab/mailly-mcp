@@ -1,23 +1,27 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import html from '../dist/ui.html';
 
-export const WORKSPACE = 'ui://mailly/workspace';
+// Two inline cards: an email thread and a reply draft. Everything else is plain tools.
 export const MAIL = 'ui://mailly/thread-card';
 export const DRAFT = 'ui://mailly/draft-card';
-export function uiMeta(uri: string, entrypoint = false) {
-  return { ui: { resourceUri: uri }, 'openai/ui': {
-    preferredModelDisplayMode: uri === WORKSPACE ? 'fullscreen' : 'inline',
-    ...(entrypoint ? { entrypoints: [{ type: 'global' }, { type: 'thread' }] } : {}),
-  } };
+export function uiMeta(uri: string) {
+  return { ui: { resourceUri: uri }, 'openai/ui': { preferredModelDisplayMode: 'inline' } };
 }
-export function registerMaillyUi(server: McpServer) {
-  for (const [uri, surface] of [[WORKSPACE, 'workspace'], [MAIL, 'mail'], [DRAFT, 'draft']]) {
+
+/** Claude serves each MCP app from a per-server origin: the first 32 hex characters of sha256(server URL). */
+export async function claudeUiDomain(serverUrl: string) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(serverUrl)));
+  return `${Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('').slice(0, 32)}.claudemcpcontent.com`;
+}
+
+export function registerMaillyUi(server: McpServer, serverUrl: string) {
+  for (const [uri, surface] of [[MAIL, 'mail'], [DRAFT, 'draft']]) {
     server.registerResource(`Mailly ${surface}`, uri, { mimeType: 'text/html;profile=mcp-app' }, async () => ({ contents: [{
       uri, mimeType: 'text/html;profile=mcp-app', text: html.replace('<html lang="en">', `<html lang="en" data-surface="${surface}" data-remote="true">`),
-      _meta: { ui: { csp: { connectDomains: [], resourceDomains: [], frameDomains: [] } }, 'openai/ui': {
-        availableDisplayModes: surface === 'workspace' ? ['fullscreen'] : ['inline', 'fullscreen'],
-        preferredDisplayMode: surface === 'workspace' ? 'fullscreen' : 'inline',
-      } },
+      _meta: {
+        ui: { csp: { connectDomains: [], resourceDomains: [], frameDomains: [] }, domain: await claudeUiDomain(serverUrl) },
+        'openai/ui': { availableDisplayModes: ['inline', 'fullscreen'], preferredDisplayMode: 'inline' },
+      },
     }] }));
   }
 }
