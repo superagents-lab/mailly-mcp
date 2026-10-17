@@ -13,15 +13,17 @@ The MCP server behind [Mailly](https://mailly.site)'s connector, plus the Mailly
 
 ## Use the hosted server
 
-Add `https://api.mailly.site/mcp` as a remote MCP server and sign in with your Mailly account (OAuth). In
+Add `https://mcp.mailly.site/mcp` as a remote MCP server and sign in with your Mailly account (OAuth). In
 Claude Code you can install the plugin instead:
 
 ```
 /plugin install mailly --marketplace superagents-lab/mailly-mcp
 ```
 
-The hosted endpoint runs OAuth in Mailly's API Worker, then forwards each request to this Worker with the
-caller's API key and granted scopes (`X-Mailly-Scopes`). Those headers can only narrow what the key allows.
+This server is an OAuth protected resource. Mailly's API (`https://api.mailly.site/api/auth`) is the authorization
+server: clients find it through `/.well-known/oauth-protected-resource`, sign the user in there, and send the
+access token here. The server passes the token, or an API key, unchanged to Mailly's REST API, which checks it and
+the scopes it carries. The tool list is narrowed to the same scopes (`GET /me`).
 
 ## Run it yourself
 
@@ -32,8 +34,8 @@ npm run dev          # wrangler dev on http://localhost:8787/mcp
 
 Call `/mcp` with `Authorization: Bearer <your Mailly API key>` (from https://mailly.site/app/developers).
 Without the `MAILLY_API` service binding it calls `MAILLY_API_URL` (default `https://api.mailly.site`) over
-the internet. The deployed `mailly-mcp` Worker has no public route; add one in `wrangler.jsonc` if you host
-your own copy.
+the internet. To host your own copy, change the `mcp.mailly.site` route in `wrangler.jsonc`. OAuth sign-in only
+works at `https://mcp.mailly.site/mcp`, because Mailly issues tokens for that resource; elsewhere use an API key.
 
 ## Develop
 

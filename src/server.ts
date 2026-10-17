@@ -23,13 +23,19 @@ export type MaillyApi = ((method: string, path: string, init?: { query?: Query; 
 
 // Every tool goes through Mailly's REST API with the caller's API key, so auth, billing, workspace isolation and
 // idempotency stay in the API. `fetchApi` is a service binding in production or plain fetch against the public API.
-export function createApi(fetchApi: (request: Request) => Promise<Response>, apiKey: string, baseUrl = 'https://api.mailly.site'): MaillyApi {
+/** A failed Mailly API call; `status` is the HTTP status. */
+export class MaillyApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+/** Calls Mailly's REST API with the caller's credential (OAuth access token or API key). */
+export function createApi(fetchApi: (request: Request) => Promise<Response>, credential: string, baseUrl = 'https://api.mailly.site'): MaillyApi {
   const api: MaillyApi = async (method, path, init) => {
     const url = new URL(path, baseUrl);
     for (const [key, value] of Object.entries(init?.query ?? {})) if (value !== undefined && value !== '') url.searchParams.set(key, String(value));
     const response = await fetchApi(new Request(url, {
       method,
-      headers: { ...init?.headers, Authorization: `Bearer ${apiKey}`, Accept: 'application/json', ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { ...init?.headers, Authorization: `Bearer ${credential}`, Accept: 'application/json', ...(init?.body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: init?.text ?? (init?.body === undefined ? undefined : JSON.stringify(init.body)),
     }));
     const text = await response.text();
@@ -38,11 +44,11 @@ export function createApi(fetchApi: (request: Request) => Promise<Response>, api
     // 207 is a batch where some items failed: the per-item results are the answer, not an error.
     if (!response.ok || (parsed?.success === false && response.status !== 207)) {
       const message = typeof parsed === 'object' && parsed?.error ? parsed.error : `HTTP ${response.status}`;
-      throw new Error(String(typeof message === 'string' ? message : JSON.stringify(message)));
+      throw new MaillyApiError(String(typeof message === 'string' ? message : JSON.stringify(message)), response.status);
     }
     return typeof parsed === 'object' ? parsed : { success: true, text: parsed };
   };
-  api.image = path => fetchApi(new Request(new URL(path, baseUrl), { headers: { Authorization: `Bearer ${apiKey}` } }));
+  api.image = path => fetchApi(new Request(new URL(path, baseUrl), { headers: { Authorization: `Bearer ${credential}` } }));
   return api;
 }
 

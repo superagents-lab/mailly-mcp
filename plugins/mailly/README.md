@@ -9,7 +9,7 @@ until you have seen the exact text and recipients and approved it.
 ## What's inside
 
 - **Mailly connector** (`.mcp.json`): the remote Mailly MCP server at
-  `https://api.mailly.site/mcp`. You sign in with your Mailly account through
+  `https://mcp.mailly.site/mcp`. You sign in with your Mailly account through
   OAuth and choose which permissions to grant: read, draft, send and manage.
 - **`mailly` skill**: tells Claude how to triage mail, draft and send replies
   safely, wait for incoming mail, and set up automation.

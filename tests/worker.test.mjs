@@ -4,19 +4,27 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Miniflare } from 'miniflare';
 
-const ORIGIN = 'http://localhost';
+const ORIGIN = 'http://mcp.localhost';
+// Stub credentials: an API key, and an OAuth token whose grant lacks mail:send and workspace:manage.
+const IDENTITIES = {
+  'Bearer good-key': { email: 'owner@example.com', credential_type: 'api_key', scopes: ['mail:read', 'mail:draft', 'mail:send', 'workspace:manage'], client_id: null },
+  'Bearer draft-token': { email: 'owner@example.com', credential_type: 'oauth', scopes: ['mail:read', 'mail:draft', 'not-a-scope'], client_id: 'client-1' },
+};
 
 async function worker(t, { apps = false } = {}) {
   const calls = [];
   const mf = new Miniflare({
     modules: true, scriptPath: new URL('../dist/worker.js', import.meta.url).pathname,
     compatibilityDate: '2026-04-01', compatibilityFlags: ['nodejs_compat'],
-    bindings: { MCP_APPS: apps ? '1' : '0' },
+    bindings: { MCP_APPS: apps ? '1' : '0', MAILLY_API_URL: 'http://api.localhost' },
     serviceBindings: {
       MAILLY_API: async (request) => {
         const url = new URL(request.url);
         calls.push({ method: request.method, path: url.pathname, query: Object.fromEntries(url.searchParams), auth: request.headers.get('authorization') });
-        if (request.headers.get('authorization') !== 'Bearer good-key') return Response.json({ success: false, error: 'Invalid API key' }, { status: 401 });
+        if (url.pathname === '/.well-known/oauth-authorization-server/api/auth') return Response.json({ issuer: 'http://api.localhost/api/auth' });
+        const identity = IDENTITIES[request.headers.get('authorization')];
+        if (!identity) return Response.json({ success: false, error: 'Invalid API key' }, { status: 401 });
+        if (url.pathname === '/me') return Response.json({ success: true, ...identity });
         if (url.pathname === '/balance') return Response.json({ success: true, balance: 5 });
         if (url.pathname === '/mail-drafts') return Response.json({ success: true, drafts: [{ id: 'd1', text: 'Hi', revision: 1, review_url: 'https://mailly.site/review#secret', review_expires_at: 1 }] });
         return Response.json({ success: true });
@@ -45,12 +53,29 @@ function rpcClient(mf, headers) {
   };
 }
 
-test('requests without a Mailly API key are refused before any API call', async (t) => {
+test('without a credential: the OAuth challenge points at this server\'s metadata, before any API call', async (t) => {
   const { mf, calls } = await worker(t);
   const response = await mf.dispatchFetch(`${ORIGIN}/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal(response.status, 401);
+  assert.equal(response.headers.get('WWW-Authenticate'), 'Bearer resource_metadata="http://mcp.localhost/.well-known/oauth-protected-resource/mcp", scope="mail:read mail:draft mail:send workspace:manage"');
   assert.equal((await mf.dispatchFetch(`${ORIGIN}/other`)).status, 404);
   assert.equal(calls.length, 0);
+
+  for (const path of ['/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-protected-resource']) {
+    const prm = await mf.dispatchFetch(`${ORIGIN}${path}`);
+    assert.equal(prm.headers.get('Access-Control-Allow-Origin'), '*');
+    assert.deepEqual(await prm.json(), {
+      resource: 'http://mcp.localhost/mcp', authorization_servers: ['http://api.localhost/api/auth'],
+      scopes_supported: ['mail:read', 'mail:draft', 'mail:send', 'workspace:manage'], bearer_methods_supported: ['header'],
+      resource_name: 'Mailly', resource_documentation: 'https://mailly.site/docs/clients',
+    });
+  }
+  const asMeta = await mf.dispatchFetch(`${ORIGIN}/.well-known/oauth-authorization-server`);
+  assert.equal((await asMeta.json()).issuer, 'http://api.localhost/api/auth');
+
+  const rejected = await mf.dispatchFetch(`${ORIGIN}/mcp`, { method: 'POST', headers: { Authorization: 'Bearer expired' }, body: '{}' });
+  assert.equal(rejected.status, 401);
+  assert.match(rejected.headers.get('WWW-Authenticate'), /^Bearer error="invalid_token", resource_metadata=/);
 });
 
 test('an API key gets every tool, and each call reaches the API with that key', async (t) => {
@@ -71,19 +96,21 @@ test('an API key gets every tool, and each call reaches the API with that key', 
   const account = await rpc('tools/call', { name: 'mailly_account', arguments: {} });
   assert.equal(account.structuredContent.balance, 5);
   assert.deepEqual(calls.at(-1), { method: 'GET', path: '/balance', query: {}, auth: 'Bearer good-key' });
+  assert.equal(account.structuredContent.email, 'owner@example.com');
   const drafts = await rpc('tools/call', { name: 'mailly_list_drafts', arguments: { thread_id: 't' } });
   assert.equal(drafts.structuredContent.drafts[0].review_url, 'https://mailly.site/review#secret');
 });
 
-test('gateway scopes narrow the tool set and withhold review links without send permission', async (t) => {
-  const { mf } = await worker(t);
-  const rpc = rpcClient(mf, { Authorization: 'Bearer good-key', 'X-Mailly-Scopes': 'mail:read mail:draft not-a-scope', 'X-Mailly-Account': 'owner@example.com', 'X-Mailly-Via': 'oauth' });
+test('an OAuth grant narrows the tool set, passes the token through and withholds review links without send', async (t) => {
+  const { mf, calls } = await worker(t);
+  const rpc = rpcClient(mf, { Authorization: 'Bearer draft-token' });
   const names = (await rpc('tools/list')).tools.map((tool) => tool.name);
   assert.ok(names.includes('mailly_save_draft'));
   for (const name of ['mailly_approve_draft', 'mailly_send_email', 'mailly_manage_workflow']) assert.ok(!names.includes(name), name);
   const account = await rpc('tools/call', { name: 'mailly_account', arguments: {} });
   assert.equal(account.structuredContent.email, 'owner@example.com');
   assert.deepEqual(account.structuredContent.scopes, ['mail:read', 'mail:draft']);
+  assert.ok(calls.every((call) => call.auth === 'Bearer draft-token'), 'the token reaches the API unchanged');
   const drafts = await rpc('tools/call', { name: 'mailly_list_drafts', arguments: { thread_id: 't' } });
   assert.equal(drafts.structuredContent.drafts[0].review_url, undefined);
 });
