@@ -34,6 +34,12 @@ export function withoutAppUi(server: McpServer) {
   const register = server.registerTool.bind(server) as (name: string, config: Record<string, unknown>, cb: unknown) => unknown;
   (server as { registerTool: unknown }).registerTool = (name: string, { _meta: _ui, ...config }: Record<string, unknown>, cb: unknown) => register(name, config, cb);
 }
+// Directory reviewers read the display title from annotations.title; mirror each tool's title there.
+export function withTitleAnnotations(server: McpServer) {
+  const register = server.registerTool.bind(server) as (name: string, config: Record<string, any>, cb: unknown) => unknown;
+  (server as { registerTool: unknown }).registerTool = (name: string, config: Record<string, any>, cb: unknown) =>
+    register(name, config.title ? { ...config, annotations: { title: config.title, ...config.annotations } } : config, cb);
+}
 export function uiResult(value: Record<string, any>) {
   const bodies: Record<string, string> = {};
   const data = value.messages ? { ...value, messages: value.messages.map(({ body_html, html_body, ...message }: Record<string, any>) => {

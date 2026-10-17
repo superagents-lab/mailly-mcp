@@ -82,7 +82,7 @@ export function registerWorkspaceTools(server: McpServer, api: MaillyApi, princi
 
     server.registerTool('mailly_save_delivery_webhook', {
       title: 'Configure delivery-event webhook',
-      description: `Create or update the webhook that receives delivery events (${DELIVERY_EVENT_TYPES.join(', ')}). url must be public HTTPS; omit it to keep the current one. events defaults to all on first setup and otherwise keeps the current list. active=false pauses deliveries but keeps the configuration. ${GUARD} ${SECRET}`,
+      description: `Create or update the webhook that receives delivery events (payload format and signatures: https://mailly.site/docs/webhooks#delivery-events; ${DELIVERY_EVENT_TYPES.join(', ')}). url must be public HTTPS; omit it to keep the current one. events defaults to all on first setup and otherwise keeps the current list. active=false pauses deliveries but keeps the configuration. ${GUARD} ${SECRET}`,
       inputSchema: z.object({
         url: z.string().min(1).max(2048).optional(),
         events: z.array(z.enum(DELIVERY_EVENT_TYPES as unknown as [string, ...string[]])).min(1).optional(),

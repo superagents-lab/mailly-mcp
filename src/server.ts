@@ -4,7 +4,7 @@ import * as z from 'zod';
 import { emailHtmlToMarkdown } from './lib/html-markdown';
 import type { McpPrincipal } from './principal';
 import { SCOPES } from './scopes';
-import { registerMaillyUi, uiMeta, uiResult, withoutAppUi, MAIL, DRAFT } from './ui';
+import { registerMaillyUi, uiMeta, uiResult, withTitleAnnotations, withoutAppUi, MAIL, DRAFT } from './ui';
 import { normalizeRemoteImageUrl, rewriteRemoteImageSources, inboxImageProxyUrl } from './lib/inbox-image-proxy';
 import { fetchRemoteImage } from './lib/remote-image';
 import { registerAutomationTools } from './automation';
@@ -119,6 +119,7 @@ export function createMaillyMcpServer(baseApi: MaillyApi, principal: McpPrincipa
       'To wait for an incoming email (for example a sign-up verification code), use mailly_wait_for_mail instead of polling mailly_list_threads.',
     ].join(' '),
   });
+  withTitleAnnotations(server);
   if (!apps) withoutAppUi(server);
   const can = (scope: string) => principal.scopes.includes(scope);
 
