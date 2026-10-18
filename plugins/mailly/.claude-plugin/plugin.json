@@ -8,6 +8,9 @@
     "url": "https://mailly.site"
   },
   "homepage": "https://mailly.site/docs/clients/claude",
+  "documentationUrl": "https://mailly.site/docs/clients/claude",
+  "privacyPolicyUrl": "https://mailly.site/privacy",
+  "termsOfServiceUrl": "https://mailly.site/terms",
   "repository": "https://github.com/superagents-lab/mailly-mcp",
   "license": "MIT",
   "keywords": ["email", "inbox", "mcp", "drafts", "campaigns"]
