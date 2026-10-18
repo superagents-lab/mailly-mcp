@@ -10,5 +10,6 @@
   "homepage": "https://mailly.site/docs/clients/claude",
   "repository": "https://github.com/superagents-lab/mailly-mcp",
   "license": "MIT",
+  "privacyPolicyUrl": "https://mailly.site/privacy",
   "keywords": ["email", "inbox", "mcp", "drafts", "campaigns"]
 }
