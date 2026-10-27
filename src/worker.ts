@@ -70,6 +70,8 @@ export default {
     if (PROTECTED_RESOURCE.test(url.pathname)) return protectedResource(url.origin, env);
     if (AUTHORIZATION_SERVER.test(url.pathname)) return authorizationServer(env);
     if (url.pathname === '/') return Response.redirect('https://mailly.site/docs/clients', 302);
+    // Nothing here is a page; keep search engines from crawling /mcp and logging 401s.
+    if (url.pathname === '/robots.txt') return new Response('User-agent: *\nDisallow: /\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     // Connector UIs look up the icon from the MCP host's own favicon, so serve Mailly's current one here.
     if (FAVICONS.has(url.pathname)) return favicon(url.pathname);
     if (url.pathname !== '/mcp') return new Response('Not found', { status: 404 });
