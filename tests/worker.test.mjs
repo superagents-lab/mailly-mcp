@@ -12,7 +12,7 @@ const IDENTITIES = {
   'Bearer draft-token': { email: 'owner@example.com', credential_type: 'oauth', scopes: ['mail:read', 'mail:draft', 'not-a-scope'], client_id: 'client-1' },
 };
 
-async function worker(t, { apps = false } = {}) {
+async function worker(t, { apps = false, outbound } = {}) {
   const calls = [];
   const mf = new Miniflare({
     modules: true, scriptPath: new URL('../dist/worker.js', import.meta.url).pathname,
@@ -22,6 +22,7 @@ async function worker(t, { apps = false } = {}) {
       MAILLY_API: async (request) => {
         const url = new URL(request.url);
         calls.push({ method: request.method, path: url.pathname, query: Object.fromEntries(url.searchParams), auth: request.headers.get('authorization') });
+        if (request.method === 'POST') Object.defineProperty(calls.at(-1), 'body', { value: await request.json(), enumerable: false });
         if (url.pathname === '/.well-known/oauth-authorization-server/api/auth') return Response.json({ issuer: 'http://api.localhost/api/auth' });
         const identity = IDENTITIES[request.headers.get('authorization')];
         if (!identity) return Response.json({ success: false, error: 'Invalid API key' }, { status: 401 });
@@ -31,7 +32,10 @@ async function worker(t, { apps = false } = {}) {
         return Response.json({ success: true });
       },
     },
-    outboundService: (request) => { throw new Error(`External network calls are forbidden in tests: ${request.url}`); },
+    outboundService: (request) => {
+      if (outbound) return outbound(request);
+      throw new Error(`External network calls are forbidden in tests: ${request.url}`);
+    },
   });
   t.after(() => mf.dispose());
   return { mf, calls };
@@ -129,4 +133,45 @@ test('MCP Apps on: only the thread and draft cards are served, with Claude\'s sa
   const names = (await rpc('tools/list')).tools.map((tool) => tool.name);
   assert.ok(!names.some((name) => name.startsWith('mailly_client_') || name === 'mailly_open' || name === 'mailly_browse'), 'no workspace or catch-all tools');
   assert.ok(names.includes('mailly_read_thread'));
+});
+
+test('send attachments: url files are downloaded through allowed redirects, base64 passes through, private hosts are refused', async (t) => {
+  const fetched = [];
+  const { mf, calls } = await worker(t, {
+    outbound: (request) => {
+      fetched.push(request.url);
+      if (request.url === 'https://files.example.com/old') return new Response(null, { status: 302, headers: { Location: '/report.pdf' } });
+      if (request.url === 'https://files.example.com/report.pdf') return new Response('%PDF-1', { headers: { 'Content-Type': 'application/pdf' } });
+      if (request.url === 'https://files.example.com/bounce') return new Response(null, { status: 302, headers: { Location: 'http://127.0.0.1/secret' } });
+      return new Response('missing', { status: 404 });
+    },
+  });
+  const rpc = rpcClient(mf, { Authorization: 'Bearer good-key' });
+  const base = { dry_run: true, confirmed: false, from_email: 'me@example.com', to: ['you@example.com'], subject: 'Report', email_type: 'transactional' };
+  const sent = await rpc('tools/call', { name: 'mailly_send_email', arguments: {
+    ...base, html: '<p>Logo <img src="cid:logo"></p>',
+    attachments: [{ url: 'https://files.example.com/old' }, { content_base64: 'iVBORw==', filename: 'logo.png', mime_type: 'image/png', content_id: 'logo' }],
+  } });
+  assert.ok(!sent.isError, JSON.stringify(sent.content));
+  assert.equal(calls.at(-1).path, '/send-email');
+  assert.deepEqual(calls.at(-1).body.attachments, [
+    { filename: 'report.pdf', mimeType: 'application/pdf', contentBase64: Buffer.from('%PDF-1').toString('base64') },
+    { filename: 'logo.png', mimeType: 'image/png', contentBase64: 'iVBORw==', contentId: 'logo' },
+  ]);
+
+  const sends = () => calls.filter((call) => call.path === '/send-email').length;
+  const before = sends();
+  for (const [url, message] of [['http://169.254.169.254/latest', /public http\(s\) address/], ['https://files.example.com/bounce', /redirects to an address that is not allowed/], ['https://files.example.com/gone', /HTTP 404/]]) {
+    const refused = await rpc('tools/call', { name: 'mailly_send_email', arguments: { ...base, text: 'Hi', attachments: [{ url }] } });
+    assert.ok(refused.isError);
+    assert.match(refused.content[0].text, message);
+  }
+  assert.equal(sends(), before, 'nothing is sent when an attachment cannot be fetched');
+  assert.ok(!fetched.some((url) => url.includes('127.0.0.1') || url.includes('169.254')), 'private addresses are never requested');
+
+  const forward = await rpc('tools/call', { name: 'mailly_forward_message', arguments: {
+    message_id: 'm1', to: 'you@example.com', idempotency_key: 'forward-1', confirmed: true, attachments: [{ content_base64: 'aGk=', filename: 'note.txt' }],
+  } });
+  assert.ok(!forward.isError, JSON.stringify(forward.content));
+  assert.deepEqual(calls.at(-1).body.attachments, [{ filename: 'note.txt', mimeType: 'application/octet-stream', contentBase64: 'aGk=' }]);
 });

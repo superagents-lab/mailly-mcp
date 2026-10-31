@@ -61,6 +61,13 @@ then send with `dry_run: false` and `confirmed: true`. This send has no
 idempotency key, so never retry an unknown outcome; check
 `mailly_list_sent_messages` instead.
 
+To attach files to `mailly_send_email` or `mailly_forward_message`, pass
+`attachments` with a public `url` for each file (Mailly downloads it) or a
+small `content_base64`. Add `content_id` and reference it in the html as
+`<img src="cid:...">` for an inline image. Up to 10 files, 6 MB in total;
+attachments need a single recipient (campaigns take inline images only). Name
+the attached files when you show the user the email to approve.
+
 ## Wait for an incoming email
 
 For a verification code, magic link or confirmation the user is expecting,
