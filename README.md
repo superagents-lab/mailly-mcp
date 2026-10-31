@@ -14,7 +14,8 @@ The MCP server behind [Mailly](https://mailly.site)'s connector, plus the Mailly
 ## Use the hosted server
 
 Add `https://mcp.mailly.site/mcp` as a remote MCP server and sign in with your Mailly account (OAuth). In
-Claude Code you can install the plugin instead:
+ChatGPT, add the published [Mailly plugin](https://chatgpt.com/plugins/plugin_asdk_app_6ad4b5fb74c0819197bc99e0927f15ab).
+In Claude Code you can install the plugin instead:
 
 ```
 /plugin install mailly --marketplace superagents-lab/mailly-mcp
