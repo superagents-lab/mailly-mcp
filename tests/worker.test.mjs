@@ -177,3 +177,23 @@ test('send attachments: url files are downloaded through allowed redirects, base
   assert.ok(!forward.isError, JSON.stringify(forward.content));
   assert.deepEqual(calls.at(-1).body.attachments, [{ filename: 'note.txt', mimeType: 'application/octet-stream', contentBase64: 'aGk=' }]);
 });
+
+test('inbound webhook delivery settings map to the API fields, and deliveries can be listed and resent', async (t) => {
+  const { mf, calls } = await worker(t);
+  const rpc = rpcClient(mf, { Authorization: 'Bearer good-key' });
+  await rpc('tools/call', { name: 'mailly_save_inbox_webhook_endpoint', arguments: {
+    mode: 'create', address_id: 'adr_1', url: 'https://example.com/hook', confirmed: true,
+    headers: [{ name: 'Authorization', value: 'Bearer x' }], payload_mode: 'template', template: '{"text": "{{subject}}"}',
+    body_max_chars: 2000, filters: { from_exclude: ['noreply@'], skip_automated: true }, max_per_minute: 5, batch_window_seconds: 60, max_attempts: 3,
+  } });
+  assert.deepEqual(calls.at(-1).body, {
+    addressId: 'adr_1', url: 'https://example.com/hook',
+    headers: [{ name: 'Authorization', value: 'Bearer x' }], payloadMode: 'template', template: '{"text": "{{subject}}"}',
+    bodyMaxChars: 2000, filters: { fromExclude: ['noreply@'], skipAutomated: true }, maxPerMinute: 5, batchWindowSeconds: 60, maxAttempts: 3,
+  });
+
+  await rpc('tools/call', { name: 'mailly_list_inbox_webhook_deliveries', arguments: { endpoint_id: 'default', status: 'failed', limit: 10 } });
+  assert.deepEqual(calls.at(-1), { method: 'GET', path: '/inbox/webhook/deliveries', query: { endpoint_id: 'default', status: 'failed', limit: '10' }, auth: 'Bearer good-key' });
+  await rpc('tools/call', { name: 'mailly_redeliver_inbox_webhook', arguments: { delivery_id: 'iwd_1', confirmed: true } });
+  assert.equal(calls.at(-1).path, '/inbox/webhook/deliveries/iwd_1/redeliver');
+});
