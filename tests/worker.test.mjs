@@ -93,7 +93,9 @@ test('an API key gets every tool, and each call reaches the API with that key', 
   for (const name of ['mailly_list_threads', 'mailly_save_draft', 'mailly_approve_draft', 'mailly_send_email', 'mailly_manage_workflow', 'mailly_wait_for_mail']) assert.ok(names.includes(name), name);
   for (const tool of tools) {
     assert.ok(tool.title, `${tool.name} has a title`);
-    assert.ok(tool.annotations && ('readOnlyHint' in tool.annotations || 'destructiveHint' in tool.annotations), `${tool.name} is annotated`);
+    for (const hint of ['readOnlyHint', 'destructiveHint', 'openWorldHint']) {
+      assert.equal(typeof tool.annotations?.[hint], 'boolean', `${tool.name} explicitly declares ${hint}`);
+    }
     assert.equal(tool.annotations.title, tool.title, `${tool.name} mirrors its title in annotations`);
     assert.ok(tool.name.length <= 64, tool.name);
   }

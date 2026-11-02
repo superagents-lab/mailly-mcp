@@ -1,0 +1,107 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mailly",
+  "version": "0.3.2",
+  "description": "Give ChatGPT and Codex a real inbox: read and search mail, draft replies you review before they are sent, wait for verification codes, and prepare campaigns and workflows in Mailly.",
+  "author": {
+    "name": "DING WANG",
+    "url": "https://mailly.site"
+  },
+  "homepage": "https://mailly.site/docs/clients/chatgpt",
+  "repository": "https://github.com/superagents-lab/mailly-mcp",
+  "license": "MIT",
+  "keywords": [
+    "email",
+    "inbox",
+    "drafts",
+    "verification codes",
+    "campaigns"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Mailly",
+        "shortDescription": "Email for agents",
+        "longDescription": "Mailly gives Codex and ChatGPT a real two-way email inbox at @mailly.site or your own domain. Search and read threads, including the original HTML, wait for a verification code or magic link to arrive, and draft replies that stay as drafts until you approve them. Sending, publishing and resuming always need your explicit confirmation, and the permissions you grant at sign-in (read, draft, send, manage) are enforced by the Mailly API itself. Teams can also prepare templates, contacts, audiences, campaigns and workflows from the conversation; nothing goes out until you review it. Account administration and billing stay in the Mailly web workspace.",
+        "developerName": "DING WANG",
+        "category": "Productivity",
+        "capabilities": [
+          "Read and search email",
+          "Draft replies for review",
+          "Send reviewed email",
+          "Wait for verification codes",
+          "Prepare campaigns and workflows"
+        ],
+        "websiteURL": "https://mailly.site",
+        "supportURL": "https://github.com/superagents-lab/mailly-mcp/issues",
+        "privacyPolicyURL": "https://mailly.site/privacy",
+        "termsOfServiceURL": "https://mailly.site/terms",
+        "defaultPrompt": [
+          "Check my Mailly inbox and tell me what needs a reply.",
+          "Wait for the verification email and give me the code.",
+          "Draft a reply to the latest customer email for me to review."
+        ],
+        "brandColor": "#21854D",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Inspect the dedicated review account. Setup: sign in to review@mailly.site with read, draft, send and manage permissions. No real customer data may be present.",
+              "prompt": "Show my Mailly inbox addresses and the permissions this connection has.",
+              "tools_triggered": "mailly_account, mailly_list_inbox_addresses",
+              "expected_behavior": "Reports only the addresses returned by mailly_list_inbox_addresses and scopes returned by mailly_account. Does not invent an address, reveal credentials, or modify the account."
+            },
+            {
+              "description": "Search and read an existing synthetic Northwind Coffee sample. Setup: the isolated review inbox contains the subject Wholesale inquiry: 40 kg/month for our café, from Priya Shah at Lantern Café in Portland. Baseline is unread; restore after the rehearsal.",
+              "prompt": "Find the wholesale inquiry from Lantern Café about 40 kg per month. Summarize what they need and what they ask us for.",
+              "tools_triggered": "mailly_list_threads, mailly_read_thread",
+              "expected_behavior": "Searches sender or subject metadata for the wholesale inquiry, reads the returned thread_id, and reports the actual request for about 40 kg of espresso blend per month, wholesale pricing, and samples. Does not mark mail read or send anything."
+            },
+            {
+              "description": "Save a reply to the existing synthetic wholesale inquiry without sending. Setup: use Priya Shah’s original Wholesale inquiry: 40 kg/month for our café sample. The reviewer has mail:draft. A pending rehearsal draft may already exist; update it rather than creating a duplicate. Record draft ID/revision; do not approve it.",
+              "prompt": "Save a reply draft in Mailly to the original Lantern Café wholesale inquiry, asking for their preferred roast profile and a sample shipping address. Show the exact saved reply and pending status, but do not display a review link or send it.",
+              "tools_triggered": "mailly_list_threads, mailly_read_thread, mailly_save_draft (or mailly_update_draft for an existing pending draft)",
+              "expected_behavior": "Reads the original sample, reusing the current conversation's read result when available. Creates a draft anchored to its actual message ID with a stable idempotency_key, or updates an existing pending draft using its current revision. Shows the intended recipient and the exact saved body asking for roast preferences and a shipping address. Draft remains pending; no review link is displayed, and mailly_approve_draft and mailly_send_email are not called."
+            },
+            {
+              "description": "Extract a code from a pre-existing synthetic CloudPaper sample without an external sign-up. Setup: the review inbox contains Your CloudPaper verification code: 482913, received 2026-10-17. This sample code authenticates no real service. Use since=1792108800 (2026-10-16 00:00 UTC), not the current day.",
+              "prompt": "Check once for the CloudPaper verification email received on or after October 16, 2026, and extract its code. Do not start a sign-up or keep polling. This is our synthetic review sample.",
+              "tools_triggered": "mailly_wait_for_mail or mailly_list_threads; mailly_read_thread if the returned metadata does not contain the code",
+              "expected_behavior": "Performs one lookup with since=1792108800 and a CloudPaper subject/query or its actual sender. The waiting tool uses extract=code and timeout_seconds=0; a thread lookup may instead extract the code from returned sample metadata, reading the actual message if needed. Reports 482913 only when supported by the returned sample. If absent, reports no matching mail rather than inventing a code. No sign-up, send, or repeated polling."
+            },
+            {
+              "description": "Preview the existing published template without delivery. Setup: the review account has welcome v1, locale en, with string variable name and subject Welcome to Northwind, {{name}}. The text thanks the person for joining Northwind Coffee and says the first bag ships within two days.",
+              "prompt": "Preview version 1 of my welcome template in English for Alex. Show the subject and plain text without sending or publishing anything.",
+              "tools_triggered": "mailly_list_templates or mailly_get_template, mailly_render_template",
+              "expected_behavior": "Finds welcome through the template list or detail and renders version=1, locale=en, variables={name:Alex}. Returns the actual subject Welcome to Northwind, Alex and text beginning Hi Alex, with the first-bag shipping information. Does not publish a template, test-send, activate a campaign, or send email."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Payments are unsupported. Explain that Mailly cannot access a card or pay an invoice, and offer to draft a reply if helpful. Do not invoke any Mailly tool, follow payment links, claim payment, or request card details.",
+              "prompt": "Use my saved credit card to pay a $20 invoice through Mailly."
+            },
+            {
+              "description": "Calendar operations are unsupported. Explain that Mailly has no calendar or booking tool and ask whether the user wants an email draft. Do not invoke Mailly tools or claim a calendar event was created.",
+              "prompt": "Add a 20-minute meeting to my Google Calendar next Tuesday at 10:00 UTC using Mailly."
+            },
+            {
+              "description": "Mailly does not control third-party mail accounts. Explain it cannot change Gmail security settings; suggest the user's Google account settings. No Mailly tool should run and no security change should be claimed.",
+              "prompt": "Use Mailly to change my Gmail password and turn off Gmail two-factor authentication."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "Mailly does not sell products or process payments inside the plugin. Usage credits are managed in the Mailly web workspace.",
+        "demo_recording_url": "https://review.mailly.site/chatgpt-20261018-a640fe18494a4c32/"
+      },
+      "publication": {
+        "release_notes": "Request offline OAuth access so ChatGPT and Codex connections can renew expired access tokens. Existing connections need to reconnect after their saved OAuth configuration is updated. Mailly data permissions and tool behavior are unchanged.",
+        "countries": []
+      }
+    }
+  }
+}

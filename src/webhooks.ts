@@ -4,6 +4,7 @@ import type { MaillyApi } from './server';
 import type { McpPrincipal } from './principal';
 import { SCOPES } from './scopes';
 import { uiResult } from './ui';
+import { READ } from './common';
 
 const id = z.string().min(1).max(128);
 const url = z.string().min(1).max(2048).describe('Public HTTPS callback URL (no credentials or custom port)');
@@ -36,7 +37,7 @@ export function registerWebhookTools(server: McpServer, api: MaillyApi, principa
     title: 'Inbound webhooks',
     description: `Read the workspace default inbound webhook and the per-address webhook endpoints, with each one's last test result. ${ROUTING} Signing secrets are never returned here.`,
     inputSchema: z.object({ address_id: id.optional().describe('Only endpoints of this inbox address') }),
-    annotations: { readOnlyHint: true, openWorldHint: false },
+    annotations: READ,
   }, ({ address_id }) => run(async () => {
     const [current, list] = await Promise.all([
       api('GET', '/inbox/webhook'),

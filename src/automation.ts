@@ -5,12 +5,11 @@ import type { McpPrincipal } from './principal';
 import { SCOPES } from './scopes';
 import { parseWorkflowDefinition } from './lib/workflow-model';
 import { uiResult } from './ui';
-import { canonical, confirmed, DESTRUCTIVE, GUARD, OUTWARD, requireScope } from './common';
+import { canonical, confirmed, DESTRUCTIVE, GUARD, OUTWARD, READ as readOnly, requireScope } from './common';
 
 const key = z.string().min(1).max(200).refine(s => !/[\r\n]/.test(s) && s !== '.' && s !== '..');
 const text = z.string().max(512 * 1024);
 const definition = z.record(z.string(), z.unknown()).describe('Workflow JSON: trigger:{event}, steps:[delay:{type:"delay",duration:"1d"}; condition:{type:"condition",if:{source:"event"|"contact",path,operator,value},onFalse:"exit"|"continue"}; send:{type:"send",stepId,template:{key,version},variables:{name:{source:"contact"|"trigger_event"|"latest_event"|"workflow_config",path,event?}}}; exit:{type:"exit",reason?}], exitOn:[event], reentry:"never"|"after_exit", optional config and entryCondition. Conditions can nest {all:[...]}/{any:[...]}. Operators: eq,neq,gt,gte,lt,lte,exists,contains. Templates must reference an existing published version before publishing.');
-const readOnly = { readOnlyHint: true, openWorldHint: false };
 const writeDraft = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 
 // Saving configuration never activates it; activation (publish/resume) is a separate confirmed step that also needs mail:send.

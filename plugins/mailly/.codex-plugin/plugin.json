@@ -1,6 +1,6 @@
 {
   "name": "mailly",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Give Codex a real inbox: read and search mail, draft replies you review before they are sent, wait for verification codes, and prepare campaigns and workflows in Mailly.",
   "author": {
     "name": "Mailly",
@@ -99,7 +99,7 @@
         "commerce_description": "Mailly does not sell products or process payments inside the plugin. Usage credits are managed in the Mailly web workspace."
       },
       "publication": {
-        "release_notes": "Initial release: read and search mail, draft replies for review, wait for verification codes, and prepare campaigns and workflows."
+        "release_notes": "Request offline OAuth access so ChatGPT and Codex connections can renew expired access tokens. Existing connections need to reconnect after their saved OAuth configuration is updated. Mailly data permissions and tool behavior are unchanged."
       }
     }
   }

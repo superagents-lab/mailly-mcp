@@ -7,6 +7,7 @@
         "com.openai": {
           "auth": {
             "type": "oauth",
+            "baseScopes": ["offline_access"],
             "client": {
               "mode": "cimd"
             }

@@ -10,6 +10,8 @@ The MCP server behind [Mailly](https://mailly.site)'s connector, plus the Mailly
   `MCP_APPS=1`.
 - [`plugins/mailly`](plugins/mailly): the plugin for Claude (claude.ai, Cowork and Claude Code) and Codex. It
   points at the hosted server and adds a skill for working with email safely.
+- [`plugins/openai/mailly`](plugins/openai/mailly): the public ChatGPT/Codex update package, based on the
+  published 0.3.1 release, with its existing listing, review cases, demo link, skill, and PNG icon retained.
 
 ## Use the hosted server
 
@@ -25,6 +27,28 @@ This server is an OAuth protected resource. Mailly's API (`https://api.mailly.si
 server: clients find it through `/.well-known/oauth-protected-resource`, sign the user in there, and send the
 access token here. The server passes the token, or an API key, unchanged to Mailly's REST API, which checks it and
 the scopes it carries. The tool list is narrowed to the same scopes (`GET /me`).
+
+### Keep ChatGPT and Codex connections authorized
+
+The public OpenAI configuration in `plugins/openai/mailly/mcp.json` and the Codex compatibility
+configuration in `plugins/mailly/.codex-plugin/mcp.json` request
+`offline_access` in `extensions.com.openai.auth.baseScopes`. Mailly issues a refresh token only when
+that scope is granted. Resource discovery and tool scopes describe Mailly data permissions; they do not
+request offline access on the client's behalf. Without it, sign-in succeeds but access ends when the
+one-hour access token expires.
+
+For a published OpenAI plugin, upload the updated plugin package to the existing plugin, confirm that
+the saved MCP authentication settings include `offline_access`, then reconnect the account and rescan.
+Deploying the Worker alone does not update those saved settings. Reconnecting with the old settings
+will still produce a connection without a refresh token. For manually configured clients, include
+`offline_access` alongside the desired Mailly scopes when starting OAuth authorization.
+
+Package the contents of `plugins/openai/mailly` as the upload root. Do not include the repository,
+marketplace, or the installed plugin's Portal-generated `.app.json` and `apps` binding in a public
+upload. Keep those generated bindings in the installed release; the submission portal owns them.
+The package version is 0.3.2. Separately, the Worker declares all three tool annotation booleans
+explicitly, including `destructiveHint: false` for read-only tools; that server update requires a
+Worker deployment and rescan. The MCP Registry listing is unchanged.
 
 ## Run it yourself
 

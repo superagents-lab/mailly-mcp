@@ -13,7 +13,7 @@ import { registerContactTools } from './contacts';
 import { registerTemplateTools } from './templates';
 import { registerWorkspaceTools } from './workspace';
 import { registerSendTools } from './send';
-import { requireScope } from './common';
+import { READ, requireScope } from './common';
 
 export type JsonResult = Record<string, any>;
 type Query = Record<string, string | number | boolean | undefined>;
@@ -82,7 +82,6 @@ const searchShape = {
   until: unixTime.describe('Unix seconds, exclusive upper bound'),
 };
 
-const READ = { readOnlyHint: true, openWorldHint: false } as const;
 const REVIEW_URL_HINT = 'Each pending draft has a review_url: a private link (valid until review_expires_at) where the user can read the exact email and tap Send or Discard on any device without signing in. You can give this link to the user instead of asking them to confirm here; anyone with it can send that draft, so share it only with the user. It stops working once the draft is sent, discarded or edited.';
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 const MAX_THREAD_MESSAGES = 30;
