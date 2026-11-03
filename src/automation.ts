@@ -11,6 +11,8 @@ const key = z.string().min(1).max(200).refine(s => !/[\r\n]/.test(s) && s !== '.
 const text = z.string().max(512 * 1024);
 const definition = z.record(z.string(), z.unknown()).describe('Workflow JSON: trigger:{event}, steps:[delay:{type:"delay",duration:"1d"}; condition:{type:"condition",if:{source:"event"|"contact",path,operator,value},onFalse:"exit"|"continue"}; send:{type:"send",stepId,template:{key,version},variables:{name:{source:"contact"|"trigger_event"|"latest_event"|"workflow_config",path,event?}}}; exit:{type:"exit",reason?}], exitOn:[event], reentry:"never"|"after_exit", optional config and entryCondition. Conditions can nest {all:[...]}/{any:[...]}. Operators: eq,neq,gt,gte,lt,lte,exists,contains. Templates must reference an existing published version before publishing.');
 const writeDraft = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+// Updates replace the stored draft or content in place; the previous text is not kept.
+const overwrite = { ...writeDraft, destructiveHint: true };
 
 // Saving configuration never activates it; activation (publish/resume) is a separate confirmed step that also needs mail:send.
 export function registerAutomationTools(server: McpServer, api: MaillyApi, principal: McpPrincipal) {
@@ -35,8 +37,8 @@ export function registerAutomationTools(server: McpServer, api: MaillyApi, princ
   }
   if (!can(SCOPES.manage)) return;
   server.registerTool('mailly_save_workflow_draft', {
-    title: 'Configure workflow draft', description: 'Create or update a workflow draft using the same API as the CLI. Does not publish, run, or send. Read the current definition before editing and preserve settings outside the requested changes. On a create conflict, read the same key instead of creating a duplicate. Publishing is a separate step (mailly_manage_workflow) after the user reviews the draft.',
-    inputSchema: z.object({ mode: z.enum(['create','update']), workflow_key: key, name: z.string().min(1).max(200), definition }), annotations: writeDraft,
+    title: 'Configure workflow draft', description: 'Create or update a workflow draft using the same API as the CLI. Does not publish, run, or send. mode=update replaces the whole draft definition and the previous draft is not kept. Read the current definition before editing and preserve settings outside the requested changes. On a create conflict, read the same key instead of creating a duplicate. Publishing is a separate step (mailly_manage_workflow) after the user reviews the draft.',
+    inputSchema: z.object({ mode: z.enum(['create','update']), workflow_key: key, name: z.string().min(1).max(200), definition }), annotations: overwrite,
   }, ({ mode, workflow_key, name, definition: value }) => run('workflows', () => api(mode === 'create' ? 'POST' : 'PUT', mode === 'create' ? '/workflows' : `/workflows/${encodeURIComponent(workflow_key)}/draft`, { body: { ...(mode === 'create' ? { workflowKey: workflow_key } : {}), name, definition: parseWorkflowDefinition(value) } })));
   server.registerTool('mailly_cancel_workflow_run', {
     title: 'Cancel one workflow run', description: `Stop one queued, running or waiting run (find its id with mailly_list_workflow_runs) before its remaining steps; emails already sent are not recalled and other runs of the workflow are untouched. A run that already ended is left as is (cancelled=false). The reason is kept in the run log. ${GUARD}`,
@@ -50,8 +52,8 @@ export function registerAutomationTools(server: McpServer, api: MaillyApi, princ
     annotations: { ...writeDraft, idempotentHint: true },
   }, body => run('campaigns', () => api('POST', '/campaigns', { body: { ...body, sourceApp: 'mailly_plugin' } })));
   server.registerTool('mailly_update_campaign_content', {
-    title: 'Edit paused campaign content', description: 'Edit only a paused campaign subject or body; keep it paused without sending. Read the campaign first. Never automatically pause a running campaign to edit it. Resuming is a separate step (mailly_manage_campaign) after the user reviews the content.',
-    inputSchema: z.object({ campaign_key: key, subject: z.string().min(1).max(998).optional(), html: text.nullable().optional(), text: text.nullable().optional() }), annotations: writeDraft,
+    title: 'Edit paused campaign content', description: 'Edit only a paused campaign subject or body; keep it paused without sending. The new subject/body replaces the old one, which is not kept: read the campaign first and confirm the change with the user. Never automatically pause a running campaign to edit it. Resuming is a separate step (mailly_manage_campaign) after the user reviews the content.',
+    inputSchema: z.object({ campaign_key: key, subject: z.string().min(1).max(998).optional(), html: text.nullable().optional(), text: text.nullable().optional() }), annotations: overwrite,
   }, ({ campaign_key, ...body }) => run('campaigns', () => api('PATCH', `/campaigns/${encodeURIComponent(campaign_key)}/content`, { body })));
   server.registerTool('mailly_manage_campaign', {
     title: 'Pause, resume, cancel or complete campaign', description: `Change a campaign's state. pause stops sending (sending/scheduled only); resume continues sending to the remaining audience (paused only, needs send permission: confirm the user reviewed content and audience); cancel stops it for good; complete closes a sending or paused campaign without sending the rest. ${GUARD}`,

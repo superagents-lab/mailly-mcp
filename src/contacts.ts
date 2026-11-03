@@ -53,7 +53,7 @@ export function registerContactTools(server: McpServer, api: MaillyApi, principa
 
   server.registerTool('mailly_save_contact', {
     title: 'Create or update contact',
-    description: `Upsert a contact by external ID. email is required. Omitted name/locale/tags keep their current values; tags replace the whole list; custom_fields are merged (set a field to null to remove it). status only switches between active and inactive: use mailly_suppress_contact to stop mail. ${GUARD}`,
+    description: `Upsert a contact by external ID. email is required. An existing contact is overwritten in place (previous values are not kept): omitted name/locale/tags keep their current values; tags replace the whole list; custom_fields are merged (set a field to null to remove it). status only switches between active and inactive: use mailly_suppress_contact to stop mail. ${GUARD}`,
     inputSchema: z.object({
       external_contact_id: contactId, email,
       name: z.string().max(200).nullable().optional(), locale: z.string().max(35).nullable().optional(),
@@ -62,7 +62,7 @@ export function registerContactTools(server: McpServer, api: MaillyApi, principa
       custom_fields: z.record(z.string(), z.unknown()).optional(),
       confirmed,
     }),
-    annotations: { ...WRITE, idempotentHint: true },
+    annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
   }, ({ external_contact_id, custom_fields, confirmed: _, ...body }) => run(() => api('PUT', `/contacts/${path(external_contact_id)}`, {
     body: { ...body, ...(custom_fields ? { customFields: custom_fields } : {}) },
   })));
@@ -136,7 +136,7 @@ export function registerContactTools(server: McpServer, api: MaillyApi, principa
 
   server.registerTool('mailly_import_contacts', {
     title: 'Import contacts',
-    description: `Create or update many contacts at once, matched by external ID (same rules as mailly_save_contact). Pass contacts (up to 1000 structured entries) or csv (raw CSV text, up to 10000 rows and 5 MB; header external_id,email plus optional name,locale,status,tags,custom_fields where tags is a JSON array or semicolon list and custom_fields a JSON object). Each row succeeds or fails on its own: report the failed rows from results to the user. ${GUARD}`,
+    description: `Create or update many contacts at once, matched by external ID (same rules as mailly_save_contact; rows matching existing contacts overwrite them and cannot be rolled back, so confirm the data with the user first). Pass contacts (up to 1000 structured entries) or csv (raw CSV text, up to 10000 rows and 5 MB; header external_id,email plus optional name,locale,status,tags,custom_fields where tags is a JSON array or semicolon list and custom_fields a JSON object). Each row succeeds or fails on its own: report the failed rows from results to the user. ${GUARD}`,
     inputSchema: z.object({
       contacts: z.array(z.object({
         external_contact_id: contactId, email,
@@ -148,7 +148,7 @@ export function registerContactTools(server: McpServer, api: MaillyApi, principa
       csv: z.string().min(1).max(5_000_000).optional(),
       confirmed,
     }),
-    annotations: { ...WRITE, idempotentHint: true },
+    annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
   }, ({ contacts, csv }) => run(() => {
     if (!contacts === !csv) throw new Error('Pass either contacts or csv');
     if (csv) return api('POST', '/contacts/import', { text: csv, headers: { 'Content-Type': 'text/csv' } });

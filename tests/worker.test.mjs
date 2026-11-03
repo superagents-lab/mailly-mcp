@@ -12,7 +12,7 @@ const IDENTITIES = {
   'Bearer draft-token': { email: 'owner@example.com', credential_type: 'oauth', scopes: ['mail:read', 'mail:draft', 'not-a-scope'], client_id: 'client-1' },
 };
 
-async function worker(t, { apps = false, outbound } = {}) {
+async function worker(t, { apps = false, outbound, api } = {}) {
   const calls = [];
   const mf = new Miniflare({
     modules: true, scriptPath: new URL('../dist/worker.js', import.meta.url).pathname,
@@ -27,6 +27,8 @@ async function worker(t, { apps = false, outbound } = {}) {
         const identity = IDENTITIES[request.headers.get('authorization')];
         if (!identity) return Response.json({ success: false, error: 'Invalid API key' }, { status: 401 });
         if (url.pathname === '/me') return Response.json({ success: true, ...identity });
+        const stubbed = api?.(url, request);
+        if (stubbed) return stubbed;
         if (url.pathname === '/balance') return Response.json({ success: true, balance: 5 });
         if (url.pathname === '/mail-drafts') return Response.json({ success: true, drafts: [{ id: 'd1', text: 'Hi', revision: 1, review_url: 'https://mailly.site/review#secret', review_expires_at: 1 }] });
         return Response.json({ success: true });
@@ -196,4 +198,25 @@ test('inbound webhook delivery settings map to the API fields, and deliveries ca
   assert.deepEqual(calls.at(-1), { method: 'GET', path: '/inbox/webhook/deliveries', query: { endpoint_id: 'default', status: 'failed', limit: '10' }, auth: 'Bearer good-key' });
   await rpc('tools/call', { name: 'mailly_redeliver_inbox_webhook', arguments: { delivery_id: 'iwd_1', confirmed: true } });
   assert.equal(calls.at(-1).path, '/inbox/webhook/deliveries/iwd_1/redeliver');
+});
+
+test('webhook tests never send saved header values to an unsaved url', async (t) => {
+  const { mf, calls } = await worker(t, { api: (url) => url.pathname === '/inbox/webhook/endpoints/whk_1'
+    ? Response.json({ success: true, endpoint: { id: 'whk_1', url: 'https://example.com/hook', headers: [{ name: 'Authorization', valueHint: '••••' }] } })
+    : null });
+  const rpc = rpcClient(mf, { Authorization: 'Bearer good-key' });
+  const test = (args) => rpc('tools/call', { name: 'mailly_test_inbox_webhook', arguments: { endpoint_id: 'whk_1', confirmed: true, ...args } });
+  const tests = () => calls.filter((call) => call.path === '/inbox/webhook/endpoints/whk_1/test').length;
+
+  for (const args of [{ url: 'https://other.example/hook' }, { url: 'https://other.example/hook', headers: [{ name: 'Authorization' }] }]) {
+    const refused = await test(args);
+    assert.ok(refused.isError);
+    assert.match(refused.content[0].text, /only sent to the saved url/);
+  }
+  assert.equal(tests(), 0);
+
+  for (const args of [{}, { url: 'https://example.com/hook' }, { url: 'https://other.example/hook', headers: [{ name: 'Authorization', value: 'Bearer new' }] }]) {
+    assert.ok(!(await test(args)).isError);
+  }
+  assert.equal(tests(), 3);
 });

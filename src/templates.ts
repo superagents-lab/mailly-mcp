@@ -50,7 +50,7 @@ export function registerTemplateTools(server: McpServer, api: MaillyApi, princip
       title: 'Create or edit template draft',
       description: `mode=create adds a template (name and definition required); mode=update replaces the draft definition (read it with mailly_get_template first and keep everything the user did not ask to change). Saving never changes the published version that workflows and sends use; publishing is a separate step. ${GUARD}`,
       inputSchema: z.object({ mode: z.enum(['create', 'update']), template_key: templateKey, name: z.string().min(1).max(200).optional(), definition, confirmed }),
-      annotations: WRITE,
+      annotations: { ...WRITE, destructiveHint: true },
     }, ({ mode, template_key, name, definition }) => run(() => {
       if (mode === 'create') {
         if (!name) throw new Error('mode=create needs name');
