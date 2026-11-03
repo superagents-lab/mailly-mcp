@@ -338,14 +338,18 @@ export function createMaillyMcpServer(baseApi: MaillyApi, principal: McpPrincipa
   if (can(SCOPES.draft)) {
     server.registerTool('mailly_save_draft', {
       title: 'Save reply draft',
-      description: `Save a reply or outbound follow-up draft for human review without sending. Reuse the same idempotency_key on retries; use mailly_update_draft for edits.${canSend ? ` ${REVIEW_URL_HINT}` : ''}`,
-      inputSchema: z.object({ anchor_email_id: id.describe('ID of the email to reply to'), text: draftText.describe('Plain text body'), idempotency_key: id }),
+      description: `Save a reply or outbound follow-up draft for human review without sending. It goes to the original sender (or, for a follow-up, the original recipient). reply_all=true also Cc's the email's other To/Cc recipients (yourself excluded); cc adds more people; the saved draft's cc shows the exact list. Use reply_all or cc only when the user wants those people copied. Reuse the same idempotency_key on retries; use mailly_update_draft for edits.${canSend ? ` ${REVIEW_URL_HINT}` : ''}`,
+      inputSchema: z.object({
+        anchor_email_id: id.describe('ID of the email to reply to'), text: draftText.describe('Plain text body'), idempotency_key: id,
+        reply_all: z.boolean().optional().describe('Also Cc the other recipients of the anchor email'),
+        cc: z.array(z.string().email().max(320)).min(1).max(50).optional().describe('Extra Cc addresses'),
+      }),
       annotations: { ...WRITE, idempotentHint: true }, _meta: uiMeta(DRAFT),
     }, (args) => run(async () => { const saved = await api('POST', '/mail-drafts', { body: args }); return { ...saved, ...await viewThread(saved.draft.thread_id), saved_draft_id: saved.draft.id }; }));
 
     server.registerTool('mailly_update_draft', {
-      title: 'Update reply draft', description: `Replace the text of an unapproved draft using its current revision; the previous text is not kept. Does not send.${canSend ? ' The edit replaces the draft\'s review_url: links shared earlier stop working, so give the user the new one.' : ''}`,
-      inputSchema: z.object({ draft_id: id, text: draftText, revision }),
+      title: 'Update reply draft', description: `Replace the text of an unapproved draft using its current revision; the previous text is not kept. cc, when given, replaces the Cc list (an empty list removes it); omit it to keep the current Cc. Does not send.${canSend ? ' The edit replaces the draft\'s review_url: links shared earlier stop working, so give the user the new one.' : ''}`,
+      inputSchema: z.object({ draft_id: id, text: draftText, revision, cc: z.array(z.string().email().max(320)).max(50).optional().describe('New Cc list; omit to keep the current one') }),
       annotations: { ...WRITE, destructiveHint: true }, _meta: uiMeta(DRAFT),
     }, ({ draft_id, ...body }) => run(async () => { const saved = await api('PATCH', `/mail-drafts/${encodeURIComponent(draft_id)}`, { body }); return { ...saved, ...await viewThread(saved.draft.thread_id), saved_draft_id: saved.draft.id }; }));
 
@@ -363,7 +367,7 @@ export function createMaillyMcpServer(baseApi: MaillyApi, principal: McpPrincipa
   if (can(SCOPES.send)) {
     server.registerTool('mailly_approve_draft', {
       title: 'Approve and send draft',
-      description: 'Send a draft only after the user reviews and explicitly confirms the exact final body and recipients in this conversation. Text and revision must exactly match the current draft. Repeated calls replay the same send without duplicate delivery.',
+      description: 'Send a draft only after the user reviews and explicitly confirms the exact final body and recipients, including the draft\'s cc, in this conversation. Text and revision must exactly match the current draft; it is sent to the saved cc as well. Repeated calls replay the same send without duplicate delivery.',
       inputSchema: z.object({ draft_id: id, text: draftText, revision }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     }, ({ draft_id, ...body }) => run(() => api('POST', `/mail-drafts/${encodeURIComponent(draft_id)}/approve`, { body })));

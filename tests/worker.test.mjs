@@ -220,3 +220,37 @@ test('webhook tests never send saved header values to an unsaved url', async (t)
   }
   assert.equal(tests(), 3);
 });
+
+test('cc, bcc and reply all map to the API for sends, forwards, drafts and agent approvals', async (t) => {
+  const { mf, calls } = await worker(t, { api: (url, request) => {
+    if (url.pathname === '/mail-drafts' && request.method === 'POST') return Response.json({ success: true, draft: { id: 'd2', thread_id: 't1', revision: 1, cc: ['jane@example.com'] } });
+    if (url.pathname === '/inbox/threads/t1') return Response.json({ success: true, thread_id: 't1', messages: [] });
+    return null;
+  } });
+  const rpc = rpcClient(mf, { Authorization: 'Bearer good-key' });
+  const base = { dry_run: true, confirmed: false, from_email: 'me@example.com', to: ['you@example.com'], subject: 'Report', text: 'Hi' };
+
+  const sent = await rpc('tools/call', { name: 'mailly_send_email', arguments: { ...base, email_type: 'transactional', cc: ['a@example.com', 'b@example.com'], bcc: ['c@example.com'] } });
+  assert.ok(!sent.isError, JSON.stringify(sent.content));
+  assert.equal(calls.at(-1).body.cc, 'a@example.com, b@example.com');
+  assert.equal(calls.at(-1).body.bcc, 'c@example.com');
+  const sends = () => calls.filter((call) => call.path === '/send-email').length;
+  const before = sends();
+  const marketing = await rpc('tools/call', { name: 'mailly_send_email', arguments: { ...base, email_type: 'marketing', topic: 'news', recipient_reason: 'subscribed', cc: ['a@example.com'] } });
+  assert.ok(marketing.isError);
+  assert.match(marketing.content[0].text, /only allowed for transactional/);
+  assert.equal(sends(), before, 'nothing is sent when cc is not allowed');
+
+  await rpc('tools/call', { name: 'mailly_forward_message', arguments: { message_id: 'm1', to: 'you@example.com', cc: ['lead@example.com'], bcc: ['audit@example.com'], idempotency_key: 'forward-cc-1', confirmed: true } });
+  assert.deepEqual([calls.at(-1).body.cc, calls.at(-1).body.bcc], [['lead@example.com'], ['audit@example.com']]);
+
+  const draft = await rpc('tools/call', { name: 'mailly_save_draft', arguments: { anchor_email_id: 'e1', text: 'Hi all', idempotency_key: 'draft-cc-1', reply_all: true, cc: ['dan@example.com'] } });
+  assert.ok(!draft.isError, JSON.stringify(draft.content));
+  const saved = calls.find((call) => call.path === '/mail-drafts' && call.method === 'POST');
+  assert.deepEqual(saved.body, { anchor_email_id: 'e1', text: 'Hi all', idempotency_key: 'draft-cc-1', reply_all: true, cc: ['dan@example.com'] });
+
+  await rpc('tools/call', { name: 'mailly_review_agent_draft', arguments: { run_id: 'run-1', decision: 'approve', text: 'Hi', cc: [], confirmed: true } });
+  assert.deepEqual(calls.at(-1).body, { text: 'Hi', cc: [] });
+  await rpc('tools/call', { name: 'mailly_review_agent_draft', arguments: { run_id: 'run-1', decision: 'approve', text: 'Hi', confirmed: true } });
+  assert.deepEqual(calls.at(-1).body, { text: 'Hi' });
+});
