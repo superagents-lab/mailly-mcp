@@ -193,6 +193,12 @@ async function openThread(id: string) {
 }
 function unavailable(node: HTMLButtonElement) { node.disabled = true; node.dataset.unavailable = 'true'; }
 function replyRecipient(anchor: Row) { return anchor.direction === 'outbound' ? anchor.to_address : anchor.reply_to_address || anchor.from_address; }
+// Everyone else a message went to or was copied to (to_recipients / cc_recipients from the thread API).
+function copiedAddresses(message: Row): string {
+  const cc = Array.isArray(message.cc_recipients) ? message.cc_recipients.map((r: Row) => r.address) : [];
+  return cc.join(', ');
+}
+function draftCc(draft: Row): string { return Array.isArray(draft.cc) ? draft.cc.join(', ') : ''; }
 function renderThread(data: Row) {
   rememberReader();
   if (data.saved_draft_id) focusedDraftId = data.saved_draft_id;
@@ -266,6 +272,7 @@ function renderThread(data: Row) {
     if ((surface === 'draft' && inline) || (inline && !isPicker && message !== latest)) continue;
     const card = el('section', '', 'email'), meta = el('div', '', 'email-head'), from = el('div');
     from.append(el('strong', `${message.direction === 'outbound' ? 'Sent · ' : ''}${message.from_name || message.from_address}`), el('span', `To: ${message.to_address}`, 'muted'));
+    if (copiedAddresses(message)) from.append(el('span', `Cc: ${copiedAddresses(message)}`, 'muted'));
     const timestamp = el('time', date(message.received_at), 'muted');
     timestamp.dateTime = new Date(message.received_at * 1000).toISOString();
     meta.append(from, timestamp);
@@ -301,6 +308,7 @@ function renderThread(data: Row) {
     const titles: Row = { pending: 'Needs review', sending: 'Sending status unconfirmed', sent: 'Submitted for sending', failed: 'Sending failed', discarded: 'Discarded' };
     const title = el('h2', 'Reply draft'); title.append(el('span', titles[draft.status] ?? draft.status, 'pill'));
     card.append(title, el('div', `To: ${recipient || 'Reload the original email before reviewing'} · Version ${draft.revision}`, 'muted'));
+    if (draftCc(draft)) card.append(el('div', `Cc: ${draftCc(draft)}`, 'muted'));
     const editor = el('textarea', '', 'form-control'); editor.rows = 9; editor.setAttribute('aria-label', 'Reply draft body');
     const edit = edits.get(draft.id);
     const frozen = draft.status !== 'pending'; editor.readOnly = frozen || permissions.draft === false;
@@ -323,7 +331,7 @@ function renderThread(data: Row) {
         if (edits.has(draft.id) && editor.value !== draft.text) throw new Error('Save your changes before reviewing the final email.');
         if (!recipient) throw new Error('Recipient unconfirmed. Reload the original email.');
         approval = { draft: { ...draft }, recipient };
-        $('confirm-recipient').textContent = `Send to: ${recipient}`;
+        $('confirm-recipient').textContent = `Send to: ${recipient}${draftCc(draft) ? ` · Cc: ${draftCc(draft)}` : ''}`;
         $('confirm-subject').textContent = `Subject: ${/^re:/i.test(anchor?.subject ?? '') ? anchor?.subject : `Re: ${anchor?.subject ?? ''}`}`;
         $('confirm-body').textContent = draft.text;
         if (inline) {

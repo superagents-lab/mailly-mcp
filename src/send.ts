@@ -7,19 +7,23 @@ import { email, GUARD, key, OUTWARD, path, recordId, run } from './common';
 import { attachmentsSchema, resolveAttachments } from './lib/attachments';
 
 const line = (max: number) => z.string().min(1).max(max).refine(s => !/[\r\n]/.test(s), 'No line breaks');
+// Cc/Bcc: each address is a recipient (billed and counted toward limits); cc + bcc are capped at 50 per email.
+const copies = (what: string) => z.array(email).min(1).max(50).optional().describe(what);
 
 // New outbound email, forwards and campaign resends (replies go through drafts). Each send keeps a review step: dry_run or an idempotency key.
 export function registerSendTools(server: McpServer, api: MaillyApi, principal: McpPrincipal) {
   if (!principal.scopes.includes(SCOPES.send)) return;
   server.registerTool('mailly_send_email', {
     title: 'Send new email',
-    description: `Send a new email (to reply to a conversation, use mailly_save_draft instead). Always call with dry_run=true first: it checks the sender domain, suppressions and unsubscribes, and reports eligible recipients and cost without sending. Then show the user the exact sender, recipients, subject and body, and call with dry_run=false and confirmed=true only after an explicit yes. Body is html and/or text, or a published template (template_key + template_version + variables). With campaign_key and no to, it sends to that campaign's frozen audience. attachments takes files by public url (Mailly downloads them) or small base64; give an attachment a content_id and reference it in html as <img src="cid:..."> to show an inline image. Tell the user which files are attached before sending. This send has no idempotency key: if the outcome is unknown, check mailly_list_sent_messages instead of retrying. ${GUARD}`,
+    description: `Send a new email (to reply to a conversation, use mailly_save_draft instead). Always call with dry_run=true first: it checks the sender domain, suppressions and unsubscribes, and reports eligible recipients and cost without sending. Then show the user the exact sender, recipients, subject and body, and call with dry_run=false and confirmed=true only after an explicit yes. Body is html and/or text, or a published template (template_key + template_version + variables). With campaign_key and no to, it sends to that campaign's frozen audience. attachments takes files by public url (Mailly downloads them) or small base64; give an attachment a content_id and reference it in html as <img src="cid:..."> to show an inline image. Tell the user which files are attached before sending. cc and bcc (transactional email only) copy other people on every email sent: list them to the user before sending, since each address is billed as a recipient, and bcc addresses are hidden from everyone else. This send has no idempotency key: if the outcome is unknown, check mailly_list_sent_messages instead of retrying. ${GUARD}`,
     inputSchema: z.object({
       dry_run: z.boolean(),
       confirmed: z.boolean().describe('true only for the real send, after the user approved the exact email'),
       from_email: email.describe('On a domain with verified sending'),
       from_name: line(200).optional(),
       to: z.array(email).min(1).max(1000).optional(),
+      cc: copies('Cc addresses (transactional only)'),
+      bcc: copies('Bcc addresses (transactional only); hidden from other recipients'),
       reply_to: email.optional(),
       subject: line(998).optional(),
       html: z.string().min(1).max(512 * 1024).optional(),
@@ -34,8 +38,10 @@ export function registerSendTools(server: McpServer, api: MaillyApi, principal: 
       attachments: attachmentsSchema.optional(),
     }),
     annotations: OUTWARD,
-  }, ({ dry_run, confirmed, to, attachments, ...mail }) => run(async () => {
+  }, ({ dry_run, confirmed, to, cc, bcc, attachments, ...mail }) => run(async () => {
     if (!dry_run && !confirmed) throw new Error('Run with dry_run=true, have the user review the exact email, then send with confirmed=true');
+    if ((cc?.length || bcc?.length) && mail.email_type !== 'transactional') throw new Error('cc and bcc are only allowed for transactional email');
+    if ((cc?.length ?? 0) + (bcc?.length ?? 0) > 50) throw new Error('cc and bcc can include at most 50 addresses in total');
     if (!to?.length && !mail.campaign_key) throw new Error('Specify to, or a campaign_key with a frozen audience');
     if (!mail.html && !mail.text && !mail.template_key) throw new Error('Specify html, text, or a template');
     if (attachments?.some(a => a.content_id) && !mail.html) throw new Error('Inline images (content_id) need an html body that references them as cid:');
@@ -45,16 +51,20 @@ export function registerSendTools(server: McpServer, api: MaillyApi, principal: 
       emailType: mail.email_type, topic: mail.topic, recipientReason: mail.recipient_reason, campaignKey: mail.campaign_key,
       templateKey: mail.template_key, templateVersion: mail.template_version, variables: mail.variables, scheduledAt: mail.scheduled_at,
       ...(to ? { to: to.length === 1 ? to[0] : to } : {}),
+      ...(cc?.length ? { cc: cc.join(', ') } : {}),
+      ...(bcc?.length ? { bcc: bcc.join(', ') } : {}),
       sourceApp: 'mailly_plugin', dryRun: dry_run,
     } });
   }));
 
   server.registerTool('mailly_forward_message', {
     title: 'Forward email',
-    description: `Forward an email (message_id from mailly_read_thread) to one address, sent from the inbox address that received it; the body is an optional note above the quoted original, and original attachments are included unless include_attachments=false; attachments adds extra files by public url or small base64. It costs credits like any send. Show the user the recipient and note first and forward only after an explicit yes. Use a new idempotency_key per forward and reuse it when retrying: a retry with the same key and content never sends twice, and a status of processing means call again with the same key. ${GUARD}`,
+    description: `Forward an email (message_id from mailly_read_thread) to one address, optionally with cc and bcc, sent from the inbox address that received it; the body is an optional note above the quoted original, and original attachments are included unless include_attachments=false; attachments adds extra files by public url or small base64. It costs credits like any send. Show the user the recipient, any cc/bcc and the note first and forward only after an explicit yes; each cc and bcc address is billed as a recipient. Use a new idempotency_key per forward and reuse it when retrying: a retry with the same key and content never sends twice, and a status of processing means call again with the same key. ${GUARD}`,
     inputSchema: z.object({
       message_id: recordId,
       to: email,
+      cc: copies('Cc addresses'),
+      bcc: copies('Bcc addresses, hidden from other recipients'),
       text: z.string().max(512_000).optional().describe('Plain-text note above the forwarded content'),
       html: z.string().max(512_000).optional().describe('HTML note, instead of or alongside text'),
       subject: line(500).optional().describe('Overrides the default "Fwd: ..." subject'),

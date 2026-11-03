@@ -160,21 +160,22 @@ export function registerWorkspaceTools(server: McpServer, api: MaillyApi, princi
 
   if (can(SCOPES.manage) || can(SCOPES.send)) server.registerTool('mailly_review_agent_draft', {
     title: 'Approve or discard agent draft',
-    description: `Decide on a reply an inbox agent drafted (run_id from mailly_list_agent_runs with approval_status=pending). approve sends exactly the given text as the reply (needs send permission): show the user the final text and recipient first and send only after an explicit yes; repeating the call never sends a second email. discard drops the draft without sending. ${GUARD}`,
+    description: `Decide on a reply an inbox agent drafted (run_id from mailly_list_agent_runs with approval_status=pending). approve sends exactly the given text as the reply (needs send permission), copying the run's draft_cc unless cc is given: show the user the final text, recipient and cc first and send only after an explicit yes; repeating the call never sends a second email. discard drops the draft without sending. ${GUARD}`,
     inputSchema: z.object({
       run_id: recordId, decision: z.enum(['approve', 'discard']),
       text: z.string().min(1).max(512 * 1024).refine(value => !!value.trim(), 'text cannot be blank').optional().describe('approve only: the exact final reply text the user approved'),
+      cc: z.array(z.string().email().max(320)).max(50).optional().describe('approve only: replace the drafted Cc list (an empty list sends without Cc)'),
       confirmed,
     }),
     annotations: { ...OUTWARD, idempotentHint: true },
-  }, ({ run_id, decision, text }) => run(() => {
+  }, ({ run_id, decision, text, cc }) => run(() => {
     if (decision === 'discard') {
       requireScope(can(SCOPES.manage), 'Discarding an agent draft');
-      if (text) throw new Error('text is only used by approve');
+      if (text || cc) throw new Error('text and cc are only used by approve');
       return api('POST', `/agents/runs/${path(run_id)}/discard`);
     }
     requireScope(can(SCOPES.send), 'Sending an agent draft');
     if (!text) throw new Error('approve needs the exact final text the user reviewed');
-    return api('POST', `/agents/runs/${path(run_id)}/approve`, { body: { text } });
+    return api('POST', `/agents/runs/${path(run_id)}/approve`, { body: { text, ...(cc ? { cc } : {}) } });
   }));
 }
