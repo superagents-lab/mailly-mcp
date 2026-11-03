@@ -75,9 +75,9 @@ export function registerWorkspaceTools(server: McpServer, api: MaillyApi, princi
 
     server.registerTool('mailly_save_marketing_settings', {
       title: 'Set marketing footer',
-      description: `Set the brand name and postal address shown in the footer of every marketing email (legally required before marketing sends). ${GUARD}`,
+      description: `Set the brand name and postal address shown in the footer of every marketing email (legally required before marketing sends). Replaces the current footer. ${GUARD}`,
       inputSchema: z.object({ brand_name: z.string().min(1).max(200), postal_address: z.string().min(1).max(500).describe('At most two lines'), confirmed }),
-      annotations: { ...WRITE, idempotentHint: true },
+      annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
     }, ({ brand_name, postal_address }) => run(() => api('PUT', '/marketing-settings', { body: { brandName: brand_name, postalAddress: postal_address } })));
 
     server.registerTool('mailly_save_delivery_webhook', {
@@ -132,7 +132,7 @@ export function registerWorkspaceTools(server: McpServer, api: MaillyApi, princi
 
     server.registerTool('mailly_save_agent', {
       title: 'Create or update inbox agent',
-      description: `mode=create adds an agent profile; mode=update changes only the fields given (agent_id required). Agent mode: off, summarize (evaluates mail), or draft (also drafts replies for human approval; it never sends on its own). address_id binds it to an inbox address (null unbinds). allowed_senders limits which senders it handles. skills replaces the whole skill list, so read the current list with mailly_list_agents and keep the others. summary_prompt sets how evaluations summarize each email; null returns to the default, which follows the workspace language. ${GUARD}`,
+      description: `mode=create adds an agent profile; mode=update overwrites the fields given (agent_id required; previous values are not kept, others stay). Agent mode: off, summarize (evaluates mail), or draft (also drafts replies for human approval; it never sends on its own). address_id binds it to an inbox address (null unbinds). allowed_senders limits which senders it handles. skills replaces the whole skill list, so read the current list with mailly_list_agents and keep the others. summary_prompt sets how evaluations summarize each email; null returns to the default, which follows the workspace language. ${GUARD}`,
       inputSchema: z.object({
         mode: z.enum(['create', 'update']), agent_id: recordId.optional(),
         name: z.string().min(1).max(100).optional().describe('Required for create'),
@@ -144,7 +144,7 @@ export function registerWorkspaceTools(server: McpServer, api: MaillyApi, princi
         summary_prompt: z.string().max(MAX_SUMMARY_PROMPT).nullable().optional().describe('null returns to the default summary prompt'),
         confirmed,
       }),
-      annotations: WRITE,
+      annotations: { ...WRITE, destructiveHint: true },
     }, ({ mode, agent_id, agent_mode, confirmed: _, ...fields }) => run(() => {
       const body = { ...fields, ...(agent_mode ? { mode: agent_mode } : {}) };
       if (mode === 'create') {

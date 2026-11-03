@@ -25,7 +25,7 @@ const header = z.object({
 const filterList = z.array(z.string().min(1).max(200)).max(50);
 // Delivery settings shared by the default webhook and address endpoints. Omitted fields keep their values; null resets to the default.
 const delivery = {
-  headers: z.array(header).max(10).optional().describe('Custom request headers such as Authorization or a version header; replaces the whole list. Values are stored encrypted and only returned masked'),
+  headers: z.array(header).max(10).optional().describe('Custom request headers such as Authorization or a version header; replaces the whole list. Values are often credentials: take them from the user, never repeat them back. They are stored encrypted, only returned masked, and sent only to this webhook\'s saved url'),
   payload_mode: z.enum(['raw', 'template']).optional().describe('raw sends the full email.received event; template sends the rendered template'),
   template: z.string().max(10000).nullable().optional().describe('JSON body template. Variables are JSON-escaped, so put text variables inside quotes: {{from}} {{from_name}} {{to}} {{subject}} {{snippet}} {{body_markdown}} {{body_text}} {{thread_id}} {{message_id}} (Mailly email id, readable with mailly_read_message) {{internet_message_id}} {{received_at}} {{truncated}} {{attachments_count}}; batches add {{count}} and {{emails}}. Example: {"text": "From {{from}}: {{subject}}\\n{{body_markdown}}"}'),
   body_max_chars: z.number().int().min(100).max(20000).nullable().optional().describe('Cut longer bodies to this many characters (default 20000)'),
@@ -143,16 +143,27 @@ export function registerWebhookTools(server: McpServer, api: MaillyApi, principa
 
   server.registerTool('mailly_test_inbox_webhook', {
     title: 'Test inbound webhook',
-    description: 'Immediately send one sample email to an endpoint, or to the default webhook when endpoint_id is omitted, exactly like a real delivery (template, custom headers, body length, signature; Mailly-Event-Type: webhook.test). Returns test.ok, responseStatus, responseBody (first 4 KB of the receiver\'s reply), requestBody (what was sent), error and durationMs. Optional overrides try unsaved url, body_format, headers, payload_mode, template or body_max_chars without saving them. It reaches the user\'s real receiver, which may start real work (for example an agent task), so run it only when the user asks to verify a webhook. Not queued or retried; at most once per 5 seconds per target. ' + DOCS,
+    description: 'Immediately send one sample email to an endpoint, or to the default webhook when endpoint_id is omitted, exactly like a real delivery (template, custom headers, body length, signature; Mailly-Event-Type: webhook.test). Returns test.ok, responseStatus, responseBody (first 4 KB of the receiver\'s reply), requestBody (what was sent), error and durationMs. Optional overrides try unsaved url, body_format, headers, payload_mode, template or body_max_chars without saving them. It sends a real HTTP request to the user\'s receiver (an external system), which may start real work (for example an agent task), so run it only when the user asks to verify a webhook. Saved header values are only sent to the saved url: to try an unsaved url, pass headers with values. Not queued or retried; at most once per 5 seconds per target. ' + DOCS + ' ' + GUARD,
     inputSchema: z.object({
       endpoint_id: id.optional(),
       url: url.optional(), body_format: bodyFormat, strip_quotes: stripQuotes,
       headers: delivery.headers, payload_mode: delivery.payload_mode, template: delivery.template, body_max_chars: delivery.body_max_chars,
+      confirmed,
     }),
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-  }, ({ endpoint_id, ...overrides }) => run(() => api('POST', endpoint_id
-    ? `/inbox/webhook/endpoints/${encodeURIComponent(endpoint_id)}/test`
-    : '/inbox/webhook/test', { body: endpointBody(overrides) })));
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }, ({ endpoint_id, confirmed: _, ...overrides }) => run(async () => {
+    const target = endpoint_id ? `/inbox/webhook/endpoints/${encodeURIComponent(endpoint_id)}` : '/inbox/webhook';
+    // Stored header values (often credentials) must never be sent to a url the user has not saved.
+    if (overrides.url !== undefined && (!overrides.headers || overrides.headers.some((h) => h.value === undefined))) {
+      const read = await api('GET', target);
+      const saved = endpoint_id ? read.endpoint : read.webhook;
+      const reused = overrides.headers ? overrides.headers.length > 0 : (saved?.headers?.length ?? 0) > 0;
+      if (saved && reused && overrides.url !== saved.url) {
+        throw new Error('Saved header values are only sent to the saved url. To test a different url, pass every header with its value (or headers: []), or save the url first.');
+      }
+    }
+    return api('POST', `${target}/test`, { body: endpointBody(overrides) });
+  }));
 
   server.registerTool('mailly_list_inbox_webhook_deliveries', {
     title: 'Inbound webhook deliveries',

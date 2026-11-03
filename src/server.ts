@@ -137,9 +137,9 @@ export function createMaillyMcpServer(baseApi: MaillyApi, principal: McpPrincipa
   if (can(SCOPES.read)) {
     if (apps) registerMaillyUi(server, options.serverUrl ?? 'https://mcp.mailly.site/mcp');
     server.registerTool('mailly_load_image', {
-      title: 'Load email image', description: 'Load an inline (cid attachment) or external image referenced by an email in the current account. Ownership is verified against the message. Returns a standard image content block; the Mailly app reads the same bytes from metadata.',
+      title: 'Load email image', description: 'Load an inline (cid attachment) or external image referenced by an email in the current account. External images are fetched from the third-party server that hosts them (public addresses only), which can see the request. Ownership is verified against the message. Returns a standard image content block; the Mailly app reads the same bytes from metadata.',
       inputSchema: z.object({ message_id: id, attachment_id: id.optional(), remote_url: z.string().max(8192).optional() }).refine(v => Boolean(v.attachment_id) !== Boolean(v.remote_url), 'Specify one image source'),
-      annotations: READ, _meta: { ui: { visibility: ['app'] } },
+      annotations: { ...READ, openWorldHint: true }, _meta: { ui: { visibility: ['app'] } },
     }, async ({ message_id, attachment_id, remote_url }) => {
       try {
         let response: Response;
@@ -344,9 +344,9 @@ export function createMaillyMcpServer(baseApi: MaillyApi, principal: McpPrincipa
     }, (args) => run(async () => { const saved = await api('POST', '/mail-drafts', { body: args }); return { ...saved, ...await viewThread(saved.draft.thread_id), saved_draft_id: saved.draft.id }; }));
 
     server.registerTool('mailly_update_draft', {
-      title: 'Update reply draft', description: `Edit an unapproved draft using its current revision. Does not send.${canSend ? ' The edit replaces the draft\'s review_url: links shared earlier stop working, so give the user the new one.' : ''}`,
+      title: 'Update reply draft', description: `Replace the text of an unapproved draft using its current revision; the previous text is not kept. Does not send.${canSend ? ' The edit replaces the draft\'s review_url: links shared earlier stop working, so give the user the new one.' : ''}`,
       inputSchema: z.object({ draft_id: id, text: draftText, revision }),
-      annotations: WRITE, _meta: uiMeta(DRAFT),
+      annotations: { ...WRITE, destructiveHint: true }, _meta: uiMeta(DRAFT),
     }, ({ draft_id, ...body }) => run(async () => { const saved = await api('PATCH', `/mail-drafts/${encodeURIComponent(draft_id)}`, { body }); return { ...saved, ...await viewThread(saved.draft.thread_id), saved_draft_id: saved.draft.id }; }));
 
     server.registerTool('mailly_discard_draft', {
