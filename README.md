@@ -30,18 +30,18 @@ the scopes it carries. The tool list is narrowed to the same scopes (`GET /me`).
 
 ### Keep ChatGPT and Codex connections authorized
 
-The public OpenAI configuration in `plugins/openai/mailly/mcp.json` and the Codex compatibility
-configuration in `plugins/mailly/.codex-plugin/mcp.json` request
-`offline_access` in `extensions.com.openai.auth.baseScopes`. Mailly issues a refresh token only when
-that scope is granted. Resource discovery and tool scopes describe Mailly data permissions; they do not
-request offline access on the client's behalf. Without it, sign-in succeeds but access ends when the
-one-hour access token expires.
+Mailly issues a refresh token only when `offline_access` is granted; without it, sign-in succeeds but the
+connection dies when the one-hour access token expires (ChatGPT then emails "Reconnect your plugin Mailly
+for daily MCP scans"). Many clients, ChatGPT included, request exactly the scopes this server advertises, so
+the 401 challenge (`WWW-Authenticate: Bearer ..., scope="..."`) and the protected resource metadata
+(`scopes_supported`) list `offline_access` next to the Mailly scopes (`REQUESTED_SCOPES` in `src/scopes.ts`).
+It grants no Mailly data. The OpenAI and Codex plugin configurations
+(`plugins/openai/mailly/mcp.json`, `plugins/mailly/.codex-plugin/mcp.json`) also request it in
+`extensions.com.openai.auth.baseScopes`.
 
-For a published OpenAI plugin, upload the updated plugin package to the existing plugin, confirm that
-the saved MCP authentication settings include `offline_access`, then reconnect the account and rescan.
-Deploying the Worker alone does not update those saved settings. Reconnecting with the old settings
-will still produce a connection without a refresh token. For manually configured clients, include
-`offline_access` alongside the desired Mailly scopes when starting OAuth authorization.
+A connection made before a client could see `offline_access` has no refresh token: reconnect it once after
+the Worker is deployed. For manually configured clients, include `offline_access` alongside the desired
+Mailly scopes when starting OAuth authorization.
 
 Package the contents of `plugins/openai/mailly` as the upload root. Do not include the repository,
 marketplace, or the installed plugin's Portal-generated `.app.json` and `apps` binding in a public
