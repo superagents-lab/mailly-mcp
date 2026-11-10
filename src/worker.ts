@@ -1,7 +1,7 @@
 import { createMcpHandler } from 'agents/mcp/server';
 import { bearerToken, resolvePrincipal } from './principal';
 import { MaillyApiError, createApi, createMaillyMcpServer } from './server';
-import { MAIL_SCOPES } from './scopes';
+import { REQUESTED_SCOPES } from './scopes';
 import { BRAND_VERSION } from './brand';
 
 export interface Env {
@@ -36,7 +36,7 @@ function protectedResource(origin: string, env: Env) {
   return Response.json({
     resource: `${origin}/mcp`,
     authorization_servers: [`${apiBase(env)}/api/auth`],
-    scopes_supported: MAIL_SCOPES,
+    scopes_supported: REQUESTED_SCOPES,
     bearer_methods_supported: ['header'],
     resource_name: 'Mailly',
     resource_documentation: 'https://mailly.site/docs/clients',
@@ -51,7 +51,7 @@ async function authorizationServer(env: Env) {
 
 // The 401 that starts sign-in: clients read the metadata URL and request these scopes.
 function challenge(origin: string, error?: string) {
-  const params = [`resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"`, `scope="${MAIL_SCOPES.join(' ')}"`];
+  const params = [`resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp"`, `scope="${REQUESTED_SCOPES.join(' ')}"`];
   if (error) params.unshift(`error="${error}"`);
   const message = error ? 'The Mailly credential is invalid or expired.' : 'Sign in to Mailly, or send Authorization: Bearer <Mailly API key>.';
   return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }), {

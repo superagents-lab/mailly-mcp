@@ -64,7 +64,7 @@ test('without a credential: the OAuth challenge points at this server\'s metadat
   const { mf, calls } = await worker(t);
   const response = await mf.dispatchFetch(`${ORIGIN}/mcp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal(response.status, 401);
-  assert.equal(response.headers.get('WWW-Authenticate'), 'Bearer resource_metadata="http://mcp.localhost/.well-known/oauth-protected-resource/mcp", scope="mail:read mail:draft mail:send workspace:manage"');
+  assert.equal(response.headers.get('WWW-Authenticate'), 'Bearer resource_metadata="http://mcp.localhost/.well-known/oauth-protected-resource/mcp", scope="mail:read mail:draft mail:send workspace:manage offline_access"');
   assert.equal((await mf.dispatchFetch(`${ORIGIN}/other`)).status, 404);
   assert.equal(calls.length, 0);
 
@@ -73,7 +73,7 @@ test('without a credential: the OAuth challenge points at this server\'s metadat
     assert.equal(prm.headers.get('Access-Control-Allow-Origin'), '*');
     assert.deepEqual(await prm.json(), {
       resource: 'http://mcp.localhost/mcp', authorization_servers: ['http://api.localhost/api/auth'],
-      scopes_supported: ['mail:read', 'mail:draft', 'mail:send', 'workspace:manage'], bearer_methods_supported: ['header'],
+      scopes_supported: ['mail:read', 'mail:draft', 'mail:send', 'workspace:manage', 'offline_access'], bearer_methods_supported: ['header'],
       resource_name: 'Mailly', resource_documentation: 'https://mailly.site/docs/clients',
     });
   }
